@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 02.10.2017 11:52
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 09.11.2017 06:26
 import numpy as np
 import tempfile
 import subprocess
@@ -13,8 +13,9 @@ from rtl import *
 #Simple buffer template
 class f2_dsp(rtl,thesdk):
     def __init__(self,*arg): 
-        self.proplist = [ 'Rs' ];    #properties that can be propagated from parent
-        self.Rs = 1;                 # sampling frequency
+        self.proplist = [ 'Rs', 'Rs_dsp' ];    #properties that can be propagated from parent
+        self.Rs = 160e6;                 # sampling frequency
+        self.Rs_dsp=20e6
         self.iptr_A = refptr();
         self.model='py';             #can be set externally, but is not propagated
         self._Z = refptr();
@@ -64,7 +65,8 @@ class f2_dsp(rtl,thesdk):
             par=False
 
         if self.model=='py':
-            out=np.array(self.iptr_A.Value)
+            resampled=np.array(self.iptr_A.Value[0::int(self.Rs/self.Rs_dsp)])
+            out=resampled
             if par:
                 queue.put(out)
             self._Z.Value=out
