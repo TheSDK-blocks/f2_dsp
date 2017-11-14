@@ -1,6 +1,7 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 09.11.2017 06:26
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 13.11.2017 19:12
 import numpy as np
+import scipy.signal as sig
 import tempfile
 import subprocess
 import shlex
@@ -13,12 +14,16 @@ from rtl import *
 #Simple buffer template
 class f2_dsp(rtl,thesdk):
     def __init__(self,*arg): 
-        self.proplist = [ 'Rs', 'Rs_dsp' ];    #properties that can be propagated from parent
+        self.proplist = [ 'Rs', 'Rs_dsp', 'Hstf', 'Hltf' ];    #properties that can be propagated from parent
         self.Rs = 160e6;                 # sampling frequency
         self.Rs_dsp=20e6
+        self.Hstf=1                      #filters for sybol sync
+        self.Hltf=1
         self.iptr_A = refptr();
         self.model='py';             #can be set externally, but is not propagated
         self._Z = refptr();
+        self._Frame_sync_short = refptr();
+        self._Frame_sync_long = refptr();
         self._classfile=__file__
         if len(arg)>=1:
             parent=arg[0]
@@ -65,11 +70,35 @@ class f2_dsp(rtl,thesdk):
             par=False
 
         if self.model=='py':
-            resampled=np.array(self.iptr_A.Value[0::int(self.Rs/self.Rs_dsp)])
-            out=resampled
+            resampled=np.array(self.iptr_A.Value[0::int(self.Rs/self.Rs_dsp)],ndmin=2)
+            out=resampled.T
+            
+            #Matched filter for sync
+            Hstf=self.Hstf
+            Hltf=self.Hltf
+            print(len(Hstf))
+
+            print(len(Hltf))
+            framesyncshort=np.abs(sig.convolve(resampled.T, Hstf, mode='full'))**2
+            framesynclong=np.abs(len(Hstf)/len(Hltf)*sig.convolve(resampled.T, Hltf, mode='full'))**2
+            Efil=np.ones((6,1))
+            Sstf=sig.convolve(framesyncshort,Efil,mode='full')
+            Sltf=sig.convolve(framesynclong,Efil,mode='full')
+            Sfil=np.zeros((65,1))
+            Sfil[16:65:16]=1
+            Snstf=sig.convolve(Sstf,Sfil,mode='full')/4
+            a=np.r_['0',Sltf, np.zeros((len(Snstf)-len(Sltf),1))]
+            Sn=a+Snstf
             if par:
                 queue.put(out)
+                queue.put(Snstf)
+                queue.put(Sn)
+            #print(out.shape)
+            #print(framesync.shape)
             self._Z.Value=out
+            self._Frame_sync_short.Value=Snstf
+            self._Frame_sync_long.Value=Sn
+
         else: 
           try:
               os.remove(self._infile)
