@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 13.11.2017 19:12
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 14.11.2017 19:50
 import numpy as np
 import scipy.signal as sig
 import tempfile
@@ -71,34 +71,101 @@ class f2_dsp(rtl,thesdk):
 
         if self.model=='py':
             resampled=np.array(self.iptr_A.Value[0::int(self.Rs/self.Rs_dsp)],ndmin=2)
-            out=resampled.T
+            #out=resampled.T
             
-            #Matched filter for sync
-            Hstf=self.Hstf
-            Hltf=self.Hltf
-            print(len(Hstf))
+            #Matched filtering for short and long sequences and squaring for energy
+            #Scale according to l2 norm
 
-            print(len(Hltf))
-            framesyncshort=np.abs(sig.convolve(resampled.T, Hstf, mode='full'))**2
-            framesynclong=np.abs(len(Hstf)/len(Hltf)*sig.convolve(resampled.T, Hltf, mode='full'))**2
+            #The maximum of this is sum of squares squared
+            matchedshort=np.abs(sig.convolve(resampled.T, self.Hstf, mode='full'))**2
+            matchedlong=(np.sum(np.abs(self.Hstf)**2)/np.sum(np.abs(self.Hltf)**2)*np.abs(sig.convolve(resampled.T, self.Hltf, mode='full')))**2
+
+            #Dummy filter to delay the payload signal
+            dfil1=np.zeros(self.Hltf.shape)
+            dfil1[-1,0]=1
+            delayed=sig.convolve(resampled.T, dfil1, mode='full')
+            
+            #Filter for energy filtering (average of 6 samples)
             Efil=np.ones((6,1))
-            Sstf=sig.convolve(framesyncshort,Efil,mode='full')
-            Sltf=sig.convolve(framesynclong,Efil,mode='full')
+            Sshort=sig.convolve(matchedshort,Efil,mode='full')
+            Slong=sig.convolve(matchedlong,Efil,mode='full')
+
+            #Dummy filter to delay the payload signal
+            dfil2=np.zeros((6,1))
+            dfil2[-1,0]=1
+            delayed=sig.convolve(delayed, dfil2, mode='full')
+            out=delayed
+
+            #Sum of the 4 past spikes with separation of 16 samples
             Sfil=np.zeros((65,1))
             Sfil[16:65:16]=1
-            Snstf=sig.convolve(Sstf,Sfil,mode='full')/4
-            a=np.r_['0',Sltf, np.zeros((len(Snstf)-len(Sltf),1))]
-            Sn=a+Snstf
-            if par:
-                queue.put(out)
-                queue.put(Snstf)
-                queue.put(Sn)
-            #print(out.shape)
-            #print(framesync.shape)
-            self._Z.Value=out
-            self._Frame_sync_short.Value=Snstf
-            self._Frame_sync_long.Value=Sn
+            Sspikes_short=sig.convolve(Sshort,Sfil,mode='full')/np.sum(np.abs(Sfil))
 
+            #Compensate the matched long for the filter delays of the short
+            delay=len(Sspikes_short)-len(Slong)
+            Slong=np.r_['0',Slong, np.zeros((delay,1))]
+            Sspikes_sum=Slong+Sspikes_short
+
+            #TODO: Check the sequence formation. Still some weirdness in the spike magnitudes 
+            #TODO: Check the effect of interpolation filtering 
+            #Find the frame start
+            found=False
+            i=0
+            Smaxprev=0
+            indmaxprev=0
+            while not found and i+16<= len(Sspikes_sum):
+                Testwin=(Sspikes_sum[i:i+16])
+                Smax=np.max(Testwin)
+                indmax=i+np.argmax(Testwin,axis=0)
+                
+                if Smax != Sspikes_sum[indmax]:
+                    self.print_log({'type':'F', 'msg': "Something wrong with the symbol boundary"})
+
+                if Smax < 0.85 * Smaxprev:
+                    found = True
+                    Smax=Smaxprev
+                    indmax=indmaxprev
+                    self.print_log({'type':'I', 'msg': "Found the Symbol boundary at sample %i" %(indmax)})
+                    
+                else:
+                    Smaxprev=Smax
+                    indmaxprev=indmax
+                    i+=16
+
+            #Need to compensate for the delays caused by the filters
+            startind=int(indmax)
+            self.print_log({'type':'I', 'msg': "Start of the long preamble sequence is at %i" %(startind)})
+
+
+            #Strip the cyclic prefix and take two sequences 
+            long_sequence=delayed[startind+16:startind+16+128,0].T
+            long_seq_freq=long_sequence.reshape((-1,64))
+            long_seq_freq=np.fft.fft(long_seq_freq,axis=1)
+            long_seq_freq=np.r_['1', long_seq_freq[:,-32:-1], long_seq_freq[:,0:32]]
+            
+
+            #Start the OFDM demodulation here
+            payload=delayed[startind+160::]
+            length=int(np.floor(payload.shape[0]/80)*80)
+            payload=payload[0:length,:]
+            payload=payload.reshape((-1,80))
+            print(payload.shape)
+            payload=payload[:,16::]
+            demod=np.fft.fft(payload,axis=1)
+            demod=np.r_['1', demod[:,-32:-1], demod[:,0:32]]
+            demod=demod.reshape(-1,1)
+
+            if par:
+                queue.put(demod)
+                queue.put(Sspikes_short)
+                queue.put(Sspikes_sum)
+                #queue.put(Slong)
+
+            self._Z.Value=demod
+            self._Frame_sync_short.Value=Sspikes_short
+            self._Frame_sync_long.Value=Sspikes_sum
+            #self._Frame_sync_long.Value=Slong
+            #Next we need to calculate the delays for the payload signal
         else: 
           try:
               os.remove(self._infile)
