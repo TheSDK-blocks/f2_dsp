@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 14.11.2017 19:50
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 15.11.2017 23:26
 import numpy as np
 import scipy.signal as sig
 import tempfile
@@ -10,6 +10,8 @@ import time
 from refptr import *
 from thesdk import *
 from rtl import *
+import signal_generator_802_11n as sg80211n
+
 
 #Simple buffer template
 class f2_dsp(rtl,thesdk):
@@ -71,8 +73,9 @@ class f2_dsp(rtl,thesdk):
 
         if self.model=='py':
             resampled=np.array(self.iptr_A.Value[0::int(self.Rs/self.Rs_dsp)],ndmin=2)
-            #out=resampled.T
-            
+            print("sskiggebyy")
+            print(self.iptr_A.Value[160+32:180+32]) 
+            #print(resampled[0,160:180,0]) 
             #Matched filtering for short and long sequences and squaring for energy
             #Scale according to l2 norm
 
@@ -84,7 +87,8 @@ class f2_dsp(rtl,thesdk):
             dfil1=np.zeros(self.Hltf.shape)
             dfil1[-1,0]=1
             delayed=sig.convolve(resampled.T, dfil1, mode='full')
-            
+            print("perseviis")
+            print(delayed[160+32:200+32])
             #Filter for energy filtering (average of 6 samples)
             Efil=np.ones((6,1))
             Sshort=sig.convolve(matchedshort,Efil,mode='full')
@@ -95,7 +99,9 @@ class f2_dsp(rtl,thesdk):
             dfil2[-1,0]=1
             delayed=sig.convolve(delayed, dfil2, mode='full')
             out=delayed
-
+            print("persekuus")
+            print(delayed[160+32:200+32])
+            #print(len(dfil1)+len(dfil2))
             #Sum of the 4 past spikes with separation of 16 samples
             Sfil=np.zeros((65,1))
             Sfil[16:65:16]=1
@@ -136,25 +142,57 @@ class f2_dsp(rtl,thesdk):
             startind=int(indmax)
             self.print_log({'type':'I', 'msg': "Start of the long preamble sequence is at %i" %(startind)})
 
+            #Ofdm manipulations start here
+            ofdm64dict=sg80211n.ofdm64dict_noguardband
 
             #Strip the cyclic prefix and take two sequences 
-            long_sequence=delayed[startind+16:startind+16+128,0].T
-            long_seq_freq=long_sequence.reshape((-1,64))
-            long_seq_freq=np.fft.fft(long_seq_freq,axis=1)
-            long_seq_freq=np.r_['1', long_seq_freq[:,-32:-1], long_seq_freq[:,0:32]]
+            print("perseseiska")
+            print(delayed[startind+32+3:startind+32+3+50])
+            print("fft")
+            test=np.fft.fft(delayed[startind+32+3:startind+32+3+64],axis=0)
+            Freqmap=range(-32,32)
+            print(test[Freqmap])
             
+            long_sequence=delayed[startind+3+32:startind+3+32+128,0].T
+            long_seq_freq=long_sequence.reshape((-1,64))
+            print(long_seq_freq)
+            long_seq_freq=np.fft.fft(long_seq_freq,axis=1)
+            #long_seq_freq=np.fft.fft(long_seq_freq[:,sg80211n.Freqmap],axis=1)
 
+            #Map the negative frequencies to the beginning of the array
+            long_seq_freq=long_seq_freq[:,sg80211n.Freqmap]
+            print(long_seq_freq) 
+            #Estimate the channel
+
+            channel_est=np.multiply(np.sum(long_seq_freq,axis=0),sg80211n.PLPCsyn_long.T)
+            print(channel_est) 
+            channel_corr=np.zeros_like(channel_est)
+            
+            data_loc=sg80211n.ofdm64dict_withguardband['data_loc']
+            pilot_loc=sg80211n.ofdm64dict_withguardband['pilot_loc']
+            data_and_pilot_loc=np.sort(np.r_[data_loc, pilot_loc])
+
+            channel_corr[0,data_and_pilot_loc+32]=1/channel_est[0,data_and_pilot_loc+32]
+            print(channel_corr) 
             #Start the OFDM demodulation here
-            payload=delayed[startind+160::]
+            payload=delayed[startind+3+160::]
             length=int(np.floor(payload.shape[0]/80)*80)
             payload=payload[0:length,:]
             payload=payload.reshape((-1,80))
-            print(payload.shape)
+            
+            #print(payload.shape)
             payload=payload[:,16::]
+            print(payload.shape)
             demod=np.fft.fft(payload,axis=1)
-            demod=np.r_['1', demod[:,-32:-1], demod[:,0:32]]
-            demod=demod.reshape(-1,1)
+            demod=demod[:,sg80211n.Freqmap]
+            corr_mat=np.ones((demod.shape[0],1))@channel_corr
 
+            demod=np.multiply(demod,corr_mat)
+            demod=demod[:,data_and_pilot_loc+32]
+            demod=demod.reshape(-1,1)
+            (LI, LQ)=calculate_evm({'signal':demod, 'QAM':16 })
+            #print((LI,LQ))
+            
             if par:
                 queue.put(demod)
                 queue.put(Sspikes_short)
@@ -199,3 +237,23 @@ class f2_dsp(rtl,thesdk):
           os.remove(self._infile)
           os.remove(self._outfile)
 
+#Define functions
+def calculate_evm(argdict):
+    signal=argdict['signal']
+    signal.shape=(-1,1)
+    QAM=argdict['QAM']
+    levels=int(np.sqrt(QAM))
+    I=np.real(signal)
+    Q=np.imag(signal)
+
+    #Constellation should be symmetric along the baseline 
+    LI=[]
+    LQ=[]
+    for i in range(int(levels/2)):
+        meanI=np.mean(I,axis=0)
+        meanQ=np.mean(Q,axis=0)
+        LI=np.r_[LI, meanI]
+        LQ=np.r_[LQ, meanQ]
+        I=np.abs(I-meanI)
+        Q=np.abs(Q-meanQ)
+    return (LI, LQ)
