@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 16.11.2017 16:48
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 17.11.2017 14:26
 import numpy as np
 import scipy.signal as sig
 import tempfile
@@ -27,6 +27,7 @@ class f2_dsp(rtl,thesdk):
         self._Frame_sync_short = refptr();
         self._Frame_sync_long = refptr();
         self._classfile=__file__
+        self.DEBUG= False
         if len(arg)>=1:
             parent=arg[0]
             self.copy_propval(parent,self.proplist)
@@ -73,15 +74,15 @@ class f2_dsp(rtl,thesdk):
 
         if self.model=='py':
             resampled=np.array(self.iptr_A.Value[0::int(self.Rs/self.Rs_dsp)],ndmin=2)
-            print("sskiggebyy")
-            print(self.iptr_A.Value[320+16:320+80]) 
+            self.print_log({'type':'D', 'msg':"sskiggebyy"})
+            self.print_log({'type':'D', 'msg':self.iptr_A.Value[320+16:320+80]}) 
             Freqmap=range(-32,32)
             test=self.iptr_A.Value[320+16:320+80]
             test.shape=(-1,1)
-            print(test.shape)
+            self.print_log({'type':'D', 'msg':test.shape})
             test=np.fft.fft(test,axis=0)/64
-            print(test[Freqmap])
-            #print(resampled[0,160:180,0]) 
+            self.print_log({'type':'D', 'msg':test[Freqmap]})
+            #self.print_log({'type':'D', 'msg':resampled[0,160:180,0]}) 
             #Matched filtering for short and long sequences and squaring for energy
             #Scale according to l2 norm
 
@@ -93,13 +94,13 @@ class f2_dsp(rtl,thesdk):
             dfil1=np.zeros(self.Hltf.shape)
             dfil1[-1,0]=1
             delayed=sig.convolve(resampled.T, dfil1, mode='full')
-            print("testviis")
-            print(delayed[320+16+len(dfil1)-1:320+len(dfil1)-1+80])
+            self.print_log({'type':'D', 'msg':"testviis"})
+            self.print_log({'type':'D', 'msg':delayed[320+16+len(dfil1)-1:320+len(dfil1)-1+80]})
             test=(delayed[320+16+len(dfil1)-1:320+len(dfil1)-1+80])
             test.shape=(-1,1)
-            print(test.shape)
+            self.print_log({'type':'D', 'msg':test.shape})
             test=np.fft.fft(test,axis=0)/64
-            print(test[Freqmap])
+            self.print_log({'type':'D', 'msg':test[Freqmap]})
             #Filter for energy filtering (average of 6 samples)
             Efil=np.ones((6,1))
             Sshort=sig.convolve(matchedshort,Efil,mode='full')
@@ -110,14 +111,14 @@ class f2_dsp(rtl,thesdk):
             dfil2[-1,0]=1
             delayed=sig.convolve(delayed, dfil2, mode='full')
             out=delayed
-            print("testkuus")
-            print(delayed[320+16+len(dfil1)-1+len(dfil2)-1:320+len(dfil1)-1+len(dfil2)-1+80])
+            self.print_log({'type':'D', 'msg':"testkuus"})
+            self.print_log({'type':'D', 'msg':delayed[320+16+len(dfil1)-1+len(dfil2)-1:320+len(dfil1)-1+len(dfil2)-1+80]})
             test=(delayed[320+16+len(dfil1)-1+len(dfil2)-1:320+len(dfil1)-1+len(dfil2)-1+80])
             test.shape=(-1,1)
-            print(test.shape)
+            self.print_log({'type':'D', 'msg':test.shape})
             test=np.fft.fft(test,axis=0)/64
-            print(test[Freqmap])
-            #print(len(dfil1)+len(dfil2))
+            self.print_log({'type':'D', 'msg':test[Freqmap]})
+            #self.print_log({'type':'D', 'msg':len(dfil1)+len(dfil2)})
             #Sum of the 4 past spikes with separation of 16 samples
             Sfil=np.zeros((65,1))
             Sfil[16:65:16]=1
@@ -162,33 +163,37 @@ class f2_dsp(rtl,thesdk):
             ofdm64dict=sg80211n.ofdm64dict_noguardband
 
             #Strip the cyclic prefix and take two sequences 
-            print("Testseiska")
-            print(startind+3+160+16)
-            print(320+16+len(dfil1)-1+len(dfil2)-1)
-            print("fft")
+            self.print_log({'type':'D', 'msg':"Testseiska"})
+            self.print_log({'type':'D', 'msg':startind+3+160+16})
+            self.print_log({'type':'D', 'msg':320+16+len(dfil1)-1+len(dfil2)-1})
+            self.print_log({'type':'D', 'msg':"fft"})
 
             test=delayed[startind+3+160+16:startind+3+160+80]
             #test=(delayed[320+16+len(dfil1)-1+len(dfil2)-1:320+len(dfil1)-1+len(dfil2)-1+80])
             test.shape=(-1,1)
             test=np.fft.fft(test,axis=0)/64
-            print(test.shape)
+            self.print_log({'type':'D', 'msg':test.shape})
             Freqmap=range(-32,32)
-            print(test[Freqmap])
+            self.print_log({'type':'D', 'msg':test[Freqmap]})
             
             #long_sequence=delayed[startind+3+16:startind+3+16+128,0].T
             long_sequence=delayed[startind+3+32:startind+3+32+128,0].T
             long_seq_freq=long_sequence.reshape((-1,64))
-            #print(long_seq_freq)
-            long_seq_freq=np.fft.fft(long_seq_freq,axis=1)
+            long_seq_freq=np.sum(long_seq_freq,axis=0)
+            self.print_log({'type':'D', 'msg':long_seq_freq})
+            #long_seq_freq=np.fft.fft(long_seq_freq,axis=1)
+            long_seq_freq=np.fft.fft(long_seq_freq)
             #long_seq_freq=np.fft.fft(long_seq_freq[:,sg80211n.Freqmap],axis=1)
 
             #Map the negative frequencies to the beginning of the array
-            long_seq_freq=long_seq_freq[:,sg80211n.Freqmap]
-            #print(long_seq_freq) 
+            #long_seq_freq=long_seq_freq[:,sg80211n.Freqmap]
+            long_seq_freq=long_seq_freq[sg80211n.Freqmap]
+            #self.print_log({'type':'D', 'msg':long_seq_freq}) 
             #Estimate the channel
 
-            channel_est=np.multiply(np.sum(long_seq_freq,axis=0),sg80211n.PLPCsyn_long.T)
-            self.print_log({'type':'I', 'msg':"Channel estimate is %s " %(20*np.log10(np.abs(channel_est)/np.max(np.abs(channel_est))))}  )
+            #channel_est=np.multiply(np.sum(long_seq_freq,axis=0),sg80211n.PLPCsyn_long.T)
+            channel_est=np.multiply(long_seq_freq,sg80211n.PLPCsyn_long.T)
+            self.print_log({'type':'D', 'msg':"Channel estimate is %s " %(20*np.log10(np.abs(channel_est)/np.max(np.abs(channel_est))))}  )
             channel_corr=np.zeros_like(channel_est)
             
             data_loc=sg80211n.ofdm64dict_withguardband['data_loc']
@@ -196,44 +201,44 @@ class f2_dsp(rtl,thesdk):
             data_and_pilot_loc=np.sort(np.r_[data_loc, pilot_loc])
 
             channel_corr[0,data_and_pilot_loc+32]=1/channel_est[0,data_and_pilot_loc+32]
-            self.print_log({'type':'I', 'msg':"Corrected channel should be is %s " %(20*np.log10(np.abs(channel_corr*channel_est)))}  )
+            self.print_log({'type':'D', 'msg':"Corrected channel should be is %s " %(20*np.log10(np.abs(channel_corr*channel_est)))}  )
             #Start the OFDM demodulation here
             # Additional 3 is simulated to provide ideal reception
             payload=delayed[startind+3+160::]
             length=int(np.floor(payload.shape[0]/80)*80)
-            print(payload.shape)
+            self.print_log({'type':'D', 'msg':payload.shape})
             payload=payload[0:length,0]
             payload.shape=(1,-1)
             payload=payload.reshape((-1,80))
             
-            #print(payload.shape)
+            #self.print_log({'type':'D', 'msg':payload.shape})
             payload=payload[:,16::]
-            print("testkasi")
-            print(payload.shape)
+            self.print_log({'type':'D', 'msg':"testkasi"})
+            self.print_log({'type':'D', 'msg':payload.shape})
             test=payload[0,:]
             test.shape=(-1,1)
             test=np.fft.fft(test,axis=0)/64
-            print(test.shape)
+            self.print_log({'type':'D', 'msg':test.shape})
             Freqmap=range(-32,32)
-            print(test[Freqmap])
-            print("payload")
-            print(payload[0,:])
-            print(payload.shape)
+            self.print_log({'type':'D', 'msg':test[Freqmap]})
+            self.print_log({'type':'D', 'msg':"payload"})
+            self.print_log({'type':'D', 'msg':payload[0,:]})
+            self.print_log({'type':'D', 'msg':payload.shape})
             demod=np.fft.fft(payload,axis=1)
             #demod=demod[:,sg80211n.Freqmap]
             demod=demod[:,Freqmap]
-            print(demod[0,:]/64)
-            print(np.multiply(demod[0,:],channel_corr))
+            self.print_log({'type':'D', 'msg':demod[0,:]/64})
+            self.print_log({'type':'D', 'msg':np.multiply(demod[0,:],channel_corr)})
             corr_mat=np.ones((demod.shape[0],1))@channel_corr
-            print(corr_mat[0,:])
+            self.print_log({'type':'D', 'msg':corr_mat[0,:]})
             demod=np.multiply(demod,corr_mat)
-            print(demod[0,:])
+            self.print_log({'type':'D', 'msg':demod[0,:]})
             demod=demod[:,data_and_pilot_loc+32]
             test=np.mean(np.abs(demod),axis=0)
-            print(test)
+            self.print_log({'type':'D', 'msg':test})
             demod=demod.reshape(-1,1)
             #(LI, LQ)=calculate_evm({'signal':demod, 'QAM':16 })
-            #print((LI,LQ))
+            #self.print_log({'type':'D', 'msg':(LI,LQ)})
             
             if par:
                 queue.put(demod)
@@ -256,17 +261,17 @@ class f2_dsp(rtl,thesdk):
           #np.savetxt(fid,np.transpose(inp),fmt='%.0f')
           fid.close()
           while not os.path.isfile(self._infile):
-              #print("Wait infile to appear")
+              self.print_log({'type':'I', 'msg':"Wait infile to appear"})
               time.sleep(1)
           try:
               os.remove(self._outfile)
           except:
               pass
-          print("Running external command \n", self._rtlcmd , "\n" )
+          self.print_log({'type':'I', 'msg':"Running external command %s\n" %(self._rtlcmd) })
           subprocess.call(shlex.split(self._rtlcmd));
           
           while not os.path.isfile(self._outfile):
-              #print("Wait outfile to appear")
+              self.print_log({'type':'I', 'msg':"Wait outfile to appear"})
               time.sleep(1)
           fid=open(self._outfile,'r')
           #fid=open(self._infile,'r')
