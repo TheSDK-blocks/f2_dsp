@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 16.11.2017 15:00
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 16.11.2017 16:48
 import numpy as np
 import scipy.signal as sig
 import tempfile
@@ -175,6 +175,7 @@ class f2_dsp(rtl,thesdk):
             Freqmap=range(-32,32)
             print(test[Freqmap])
             
+            #long_sequence=delayed[startind+3+16:startind+3+16+128,0].T
             long_sequence=delayed[startind+3+32:startind+3+32+128,0].T
             long_seq_freq=long_sequence.reshape((-1,64))
             #print(long_seq_freq)
@@ -187,7 +188,7 @@ class f2_dsp(rtl,thesdk):
             #Estimate the channel
 
             channel_est=np.multiply(np.sum(long_seq_freq,axis=0),sg80211n.PLPCsyn_long.T)
-            #print(channel_est) 
+            self.print_log({'type':'I', 'msg':"Channel estimate is %s " %(20*np.log10(np.abs(channel_est)/np.max(np.abs(channel_est))))}  )
             channel_corr=np.zeros_like(channel_est)
             
             data_loc=sg80211n.ofdm64dict_withguardband['data_loc']
@@ -195,8 +196,9 @@ class f2_dsp(rtl,thesdk):
             data_and_pilot_loc=np.sort(np.r_[data_loc, pilot_loc])
 
             channel_corr[0,data_and_pilot_loc+32]=1/channel_est[0,data_and_pilot_loc+32]
-            #print(channel_corr) 
+            self.print_log({'type':'I', 'msg':"Corrected channel should be is %s " %(20*np.log10(np.abs(channel_corr*channel_est)))}  )
             #Start the OFDM demodulation here
+            # Additional 3 is simulated to provide ideal reception
             payload=delayed[startind+3+160::]
             length=int(np.floor(payload.shape[0]/80)*80)
             print(payload.shape)
@@ -207,6 +209,7 @@ class f2_dsp(rtl,thesdk):
             #print(payload.shape)
             payload=payload[:,16::]
             print("testkasi")
+            print(payload.shape)
             test=payload[0,:]
             test.shape=(-1,1)
             test=np.fft.fft(test,axis=0)/64
@@ -217,12 +220,17 @@ class f2_dsp(rtl,thesdk):
             print(payload[0,:])
             print(payload.shape)
             demod=np.fft.fft(payload,axis=1)
-            demod=demod[:,sg80211n.Freqmap]
+            #demod=demod[:,sg80211n.Freqmap]
+            demod=demod[:,Freqmap]
             print(demod[0,:]/64)
+            print(np.multiply(demod[0,:],channel_corr))
             corr_mat=np.ones((demod.shape[0],1))@channel_corr
-
+            print(corr_mat[0,:])
             demod=np.multiply(demod,corr_mat)
+            print(demod[0,:])
             demod=demod[:,data_and_pilot_loc+32]
+            test=np.mean(np.abs(demod),axis=0)
+            print(test)
             demod=demod.reshape(-1,1)
             #(LI, LQ)=calculate_evm({'signal':demod, 'QAM':16 })
             #print((LI,LQ))
