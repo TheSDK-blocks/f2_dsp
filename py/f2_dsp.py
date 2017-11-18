@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 17.11.2017 14:26
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 18.11.2017 07:31
 import numpy as np
 import scipy.signal as sig
 import tempfile
@@ -176,8 +176,12 @@ class f2_dsp(rtl,thesdk):
             Freqmap=range(-32,32)
             self.print_log({'type':'D', 'msg':test[Freqmap]})
             
-            #long_sequence=delayed[startind+3+16:startind+3+16+128,0].T
-            long_sequence=delayed[startind+3+32:startind+3+32+128,0].T
+            #Offset is used to position the sampling istant in the middle of cyclic prefixes
+            #If delay is off, it is visible as phase offset and is compensated by
+            #channel egualization, as long as the delay offset is the same for long sequence and
+            #payload frames
+            offset=24
+            long_sequence=delayed[startind+3+offset:startind+3+offset+128,0].T
             long_seq_freq=long_sequence.reshape((-1,64))
             long_seq_freq=np.sum(long_seq_freq,axis=0)
             self.print_log({'type':'D', 'msg':long_seq_freq})
@@ -202,9 +206,11 @@ class f2_dsp(rtl,thesdk):
 
             channel_corr[0,data_and_pilot_loc+32]=1/channel_est[0,data_and_pilot_loc+32]
             self.print_log({'type':'D', 'msg':"Corrected channel should be is %s " %(20*np.log10(np.abs(channel_corr*channel_est)))}  )
+
             #Start the OFDM demodulation here
             # Additional 3 is simulated to provide ideal reception
-            payload=delayed[startind+3+160::]
+            #payload=delayed[startind+3+160::]
+            payload=delayed[startind+3+offset+128::]
             length=int(np.floor(payload.shape[0]/80)*80)
             self.print_log({'type':'D', 'msg':payload.shape})
             payload=payload[0:length,0]
