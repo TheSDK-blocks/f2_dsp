@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 20.11.2017 14:53
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 20.11.2017 18:18
 import numpy as np
 import scipy.signal as sig
 import tempfile
@@ -30,7 +30,9 @@ class f2_dsp(rtl,thesdk):
         self._sync_index=[]              #Signal index for the symbol synchronization
         self._channel_est=[]
         self._channel_corr=[]
-        self._Z = refptr();
+        self._symbols = refptr();
+        self._wordstream = refptr();
+        self._bitstream = refptr();
         self._Frame_sync_short = refptr();
         self._Frame_sync_long = refptr();
         self._classfile=__file__
@@ -85,6 +87,7 @@ class f2_dsp(rtl,thesdk):
             self.symbol_sync()
             self.estimate_channel()
             self.receive_symbols()
+            self.extract_data()
 
         else: 
           try:
@@ -228,9 +231,7 @@ class f2_dsp(rtl,thesdk):
         pilot_loc=sg80211n.ofdm64dict_withguardband['pilot_loc']
         data_and_pilot_loc=np.sort(np.r_[data_loc, pilot_loc])
         cyclicsymlen=int(sg80211n.ofdm64dict_noguardband['framelen']+sg80211n.ofdm64dict_noguardband['CPlen'])
-        print(self._delayed.shape)
         payload=self._delayed[self._sync_index+offset+2*len(sg80211n.PLPCsyn_long)::]
-        print(payload.shape)
         length=int(np.floor(payload.shape[0]/cyclicsymlen)*(cyclicsymlen))
         payload=payload[0:length,0]
         payload.shape=(1,-1)
@@ -244,7 +245,34 @@ class f2_dsp(rtl,thesdk):
         demod=np.multiply(demod,corr_mat)
         demod=demod[:,data_and_pilot_loc+int(sg80211n.ofdm64dict_noguardband['framelen']/2)]
         demod=demod.reshape(-1,1)
+        self.symbols=demod
 
         if self.par:
             self.queue.put(demod)
-        self._Z.Value=demod
+        self._symbols.Value=demod
+
+    def extract_data(self):
+        QAM=16
+        maxval=int(np.sqrt(QAM))-1
+        #Scaling for quantization
+        conststd=np.sqrt(np.sum(np.arange(1,maxval+1,2)**2))/len(np.arange(1,maxval+1,2))
+        
+        #Shift to positive and quantize
+        normalized=self.symbols/np.std(self.symbols)*conststd+maxval/2*(1+1j)
+        #Quantize modulation levels in multiples of 1
+        realwordstream = np.clip(np.round(np.real(normalized)), 0, maxval).astype(int)
+        imagwordstream = np.clip(np.round(np.imag(normalized)), 0, maxval).astype(int)
+        
+        #In QAM modulation used, lsb's map to imaginary part.
+        wordstream = np.array((imagwordstream + (maxval+1)*realwordstream),dtype=np.uint8)
+        bitstream=np.unpackbits(wordstream, axis=0)
+        bitstream=bitstream.reshape((-1,8))
+        bitstream=bitstream[:,-int(np.log2(QAM))::]
+        bitstream=bitstream.reshape((-1,1))
+
+        if self.par:
+            self.queue.put(wordstream)
+            self.queue.put(bitstream)
+        self._wordstream.Value=wordstream
+        self._bitstream.Value=bitstream
+
