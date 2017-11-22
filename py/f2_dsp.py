@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 20.11.2017 18:18
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 21.11.2017 11:59
 import numpy as np
 import scipy.signal as sig
 import tempfile
@@ -245,7 +245,7 @@ class f2_dsp(rtl,thesdk):
         demod=np.multiply(demod,corr_mat)
         demod=demod[:,data_and_pilot_loc+int(sg80211n.ofdm64dict_noguardband['framelen']/2)]
         demod=demod.reshape(-1,1)
-        self.symbols=demod
+        #self.symbols=demod
 
         if self.par:
             self.queue.put(demod)
@@ -258,7 +258,7 @@ class f2_dsp(rtl,thesdk):
         conststd=np.sqrt(np.sum(np.arange(1,maxval+1,2)**2))/len(np.arange(1,maxval+1,2))
         
         #Shift to positive and quantize
-        normalized=self.symbols/np.std(self.symbols)*conststd+maxval/2*(1+1j)
+        normalized=self._symbols.Value/np.std(self._symbols.Value)*conststd+maxval/2*(1+1j)
         #Quantize modulation levels in multiples of 1
         realwordstream = np.clip(np.round(np.real(normalized)), 0, maxval).astype(int)
         imagwordstream = np.clip(np.round(np.imag(normalized)), 0, maxval).astype(int)
