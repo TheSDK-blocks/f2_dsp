@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 21.11.2017 11:59
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 22.11.2017 18:13
 import numpy as np
 import scipy.signal as sig
 import tempfile
@@ -16,9 +16,11 @@ import signal_generator_802_11n as sg80211n
 #Simple buffer template
 class f2_dsp(rtl,thesdk):
     def __init__(self,*arg): 
-        self.proplist = [ 'Rs', 'Rs_dsp', 'Hstf', 'Hltf' ];    #properties that can be propagated from parent
+        self.proplist = [ 'Rs', 'Rs_dsp', 'Hstf', 'Hltf', 'Users' ];    #properties that can be propagated from parent
         self.Rs = 160e6;                 # sampling frequency
         self.Rs_dsp=20e6
+        self.Users=1
+        self.Userindex=0                 #This is to control the sync and channel estimation
         self.Hstf=1                      #filters for sybol sync
         self.Hltf=1
         self.iptr_A = refptr();
@@ -36,11 +38,15 @@ class f2_dsp(rtl,thesdk):
         self._Frame_sync_short = refptr();
         self._Frame_sync_long = refptr();
         self._classfile=__file__
-        self.DEBUG= False
+        self.DEBUG= True
         if len(arg)>=1:
             parent=arg[0]
             self.copy_propval(parent,self.proplist)
             self.parent =parent;
+        if len(arg) >=2:
+            self.Userindex=arg[1]
+            self.print_log({'type':'I','msg':"Setting Userindex %s to %i" %(self, self.Userindex)})
+
     def init(self):
         self.def_rtl()
         rndpart=os.path.basename(tempfile.mkstemp()[1])
@@ -163,11 +169,12 @@ class f2_dsp(rtl,thesdk):
         self.Sspikes_short=Sspikes_short
 
         #Find the frame start
+        usercount=0
         found=False
         i=0
         Smaxprev=0
         indmaxprev=0
-        while not found and i+16<= len(Sspikes_sum):
+        while usercount< self.Users and i+16<= len(Sspikes_sum):
             Testwin=(Sspikes_sum[i:i+16])
             Smax=np.max(Testwin)
             indmax=i+np.argmax(Testwin,axis=0)
@@ -176,11 +183,27 @@ class f2_dsp(rtl,thesdk):
                 self.print_log({'type':'F', 'msg': "Something wrong with the symbol boundary"})
 
             if Smax < 0.85 * Smaxprev:
-                found = True
-                Smax=Smaxprev
-                indmax=indmaxprev
-                self.print_log({'type':'I', 'msg': "Found the Symbol boundary at sample %i" %(indmax)})
-                
+                if usercount==self.Userindex:
+                    print(usercount)
+                    found = True
+                    Smax=Smaxprev
+                    indmax=indmaxprev
+                    indch=indmaxprev
+                    indstart=indmaxprev
+                    self.print_log({'type':'I', 'msg': "Found the Symbol boundary at sample %i" %(indmax)})
+                    self.print_log({'type':'D','msg': "Indstart for user %i is %i" %(self.Userindex, indstart)})
+                    i+=128
+                else:
+                    #usercount+=1
+                    Smaxprev=0
+                    indmaxprev=indmax
+                    #For every user sync there is four frames of zeros transmittes
+                    i+=128
+                    if found:
+                        indstart=indstart+4*80
+                        self.print_log({'type':'D','msg': "Indstart for user %i is %i" %(self.Userindex, indstart)})
+                usercount+=1
+
             else:
                 Smaxprev=Smax
                 indmaxprev=indmax
@@ -188,10 +211,12 @@ class f2_dsp(rtl,thesdk):
         if self.par:
             self.queue.put(Sspikes_short)
             self.queue.put(Sspikes_sum)
-        self._sync_index=int(indmax)+int(Efil.shape[0]/2)
+        self._sync_index=int(indstart+2*len(sg80211n.PLPCsyn_long))+int(Efil.shape[0]/2)
+        self._ch_index=int(indch)+int(Efil.shape[0]/2)
         self._Frame_sync_short.Value=Sspikes_short
         self._Frame_sync_long.Value=Sspikes_sum
-        self.print_log({'type':'I', 'msg': "Start of the long preamble sequence is at %i" %(self._sync_index)})
+        self.print_log({'type':'I', 'msg': "Start of the long preamble sequence is at %i" %(self._ch_index)})
+        self.print_log({'type':'I', 'msg': "Start of the user %i data is at %i" %(self.Userindex,self._sync_index)})
 
     def estimate_channel(self):
         #Offset is used to position the sampling istant in the middle of cyclic prefixes
@@ -200,7 +225,7 @@ class f2_dsp(rtl,thesdk):
         #channel egualization, as long as the delay offset is the same for long sequence and
         #payload frames
         offset=int(sg80211n.TGI2/2)+int(sg80211n.ofdm64dict_noguardband['CPlen']/2)
-        long_sequence=self._delayed[self._sync_index+offset:self._sync_index+offset+128,0].T
+        long_sequence=self._delayed[self._ch_index+offset:self._ch_index+offset+128,0].T
         long_seq_freq=long_sequence.reshape((-1,64))
         long_seq_freq=np.sum(long_seq_freq,axis=0)
         long_seq_freq=np.fft.fft(long_seq_freq)
@@ -211,7 +236,7 @@ class f2_dsp(rtl,thesdk):
         #Estimate the channel
         #channel_est=np.multiply(np.sum(long_seq_freq,axis=0),sg80211n.PLPCsyn_long.T)
         channel_est=np.multiply(long_seq_freq,sg80211n.PLPCsyn_long.T)
-        self.print_log({'type':'D', 'msg':"Channel estimate is %s " %(20*np.log10(np.abs(channel_est)/np.max(np.abs(channel_est))))}  )
+        self.print_log({'type':'D', 'msg':"Channel estimate in dB is %s " %(20*np.log10(np.abs(channel_est)/np.max(np.abs(channel_est))))}  )
         channel_corr=np.zeros_like(channel_est)
 
         data_loc=sg80211n.ofdm64dict_withguardband['data_loc']
@@ -219,7 +244,7 @@ class f2_dsp(rtl,thesdk):
         data_and_pilot_loc=np.sort(np.r_[data_loc, pilot_loc])
 
         channel_corr[0,data_and_pilot_loc+32]=1/channel_est[0,data_and_pilot_loc+32]
-        self.print_log({'type':'D', 'msg':"Corrected channel should be is %s " %(20*np.log10(np.abs(channel_corr*channel_est)))}  )
+        self.print_log({'type':'D', 'msg':"Corrected channel dB is %s " %(20*np.log10(np.abs(channel_corr*channel_est)))}  )
         self._channel_est=channel_est
         self._channel_corr=channel_corr
 
@@ -231,7 +256,9 @@ class f2_dsp(rtl,thesdk):
         pilot_loc=sg80211n.ofdm64dict_withguardband['pilot_loc']
         data_and_pilot_loc=np.sort(np.r_[data_loc, pilot_loc])
         cyclicsymlen=int(sg80211n.ofdm64dict_noguardband['framelen']+sg80211n.ofdm64dict_noguardband['CPlen'])
-        payload=self._delayed[self._sync_index+offset+2*len(sg80211n.PLPCsyn_long)::]
+
+        #payload=self._delayed[self._sync_index+offset+2*len(sg80211n.PLPCsyn_long)::]
+        payload=self._delayed[self._sync_index+offset::]
         length=int(np.floor(payload.shape[0]/cyclicsymlen)*(cyclicsymlen))
         payload=payload[0:length,0]
         payload.shape=(1,-1)
@@ -245,6 +272,7 @@ class f2_dsp(rtl,thesdk):
         demod=np.multiply(demod,corr_mat)
         demod=demod[:,data_and_pilot_loc+int(sg80211n.ofdm64dict_noguardband['framelen']/2)]
         demod=demod.reshape(-1,1)
+        #demod=np.r_['0',demod,np.zeros(((len(self.delayed)-len(demod)),1),dtype=complex)]
         #self.symbols=demod
 
         if self.par:
