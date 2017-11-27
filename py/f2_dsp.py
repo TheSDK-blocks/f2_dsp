@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 22.11.2017 18:13
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 27.11.2017 15:01
 import numpy as np
 import scipy.signal as sig
 import tempfile
@@ -38,7 +38,7 @@ class f2_dsp(rtl,thesdk):
         self._Frame_sync_short = refptr();
         self._Frame_sync_long = refptr();
         self._classfile=__file__
-        self.DEBUG= True
+        self.DEBUG= False
         if len(arg)>=1:
             parent=arg[0]
             self.copy_propval(parent,self.proplist)
@@ -198,7 +198,7 @@ class f2_dsp(rtl,thesdk):
                     Smaxprev=0
                     indmaxprev=indmax
                     #For every user sync there is four frames of zeros transmittes
-                    i+=128
+                    i+=256
                     if found:
                         indstart=indstart+4*80
                         self.print_log({'type':'D','msg': "Indstart for user %i is %i" %(self.Userindex, indstart)})
