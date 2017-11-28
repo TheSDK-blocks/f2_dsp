@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 27.11.2017 15:01
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 27.11.2017 18:47
 import numpy as np
 import scipy.signal as sig
 import tempfile
@@ -27,11 +27,12 @@ class f2_dsp(rtl,thesdk):
         self.model='py';                 #can be set externally, but is not propagated
         self.par= False                  #By default, no parallel processing
         self.queue= []                   #By default, no parallel processing
-        self._decimated=[]               #signals sampled at Rs_dsp
-        self._delayed=[]
-        self._sync_index=[]              #Signal index for the symbol synchronization
-        self._channel_est=[]
-        self._channel_corr=[]
+        self._decimated=refptr()               #signals sampled at Rs_dsp
+        self._delayed=refptr()
+        self._sync_index=refptr()              #Signal index for the symbol synchronization
+        self._ch_index=refptr              #Signal index for the symbol synchronization
+        self._channel_est=refptr()
+        self._channel_corr=refptr()
         self._symbols = refptr();
         self._wordstream = refptr();
         self._bitstream = refptr();
@@ -80,20 +81,33 @@ class f2_dsp(rtl,thesdk):
             rtlcmd=[]
         return rtlcmd
 
+    def get_channel_estimate(self,*arg):
+        if len(arg)>0:
+            self.par=True      #flag for parallel processing
+            self.queue=arg[0]  #multiprocessing.Queue as the first argument
+     
+        self.decimate_input()
+        self.delay_input()
+        self.symbol_sync()
+        self.estimate_channel()
+
+    def receive_data(self,*arg):
+        if len(arg)>0:
+            self.par=True      #flag for parallel processing
+            self.queue=arg[0]  #multiprocessing.Queue as the first argument
+     
+        self.receive_symbols()
+        self.extract_data()
+
+
     def run(self,*arg):
         if len(arg)>0:
             self.par=True      #flag for parallel processing
             self.queue=arg[0]  #multiprocessing.Queue as the first argument
-        else:
-            self.par=False
 
         if self.model=='py':
-            self.decimate_input()
-            self.delay_input()
-            self.symbol_sync()
-            self.estimate_channel()
-            self.receive_symbols()
-            self.extract_data()
+            self.get_channel_estimate()
+            self.receive_data()
 
         else: 
           try:
@@ -130,27 +144,37 @@ class f2_dsp(rtl,thesdk):
 
     def decimate_input(self):
         #This is teh simplest form of decimation
-        self._decimated=np.array(self.iptr_A.Value[0::int(self.Rs/self.Rs_dsp)],ndmin=2)
-        self._decimated.shape=((-1,1)) 
+        decimated=np.array(self.iptr_A.Value[0::int(self.Rs/self.Rs_dsp)],ndmin=2)
+        decimated.shape=((-1,1)) 
+        if self.par:
+           self.queue.put(decimated)
+
+        self._decimated.Value=decimated
     
     def delay_input(self):
         #Dummy filter to delay the payload signal in paralled with symbol sync
         dfil1=np.zeros(self.Hltf.shape)
         dfil1[-1,0]=1
-        self.delayed=sig.convolve(self._decimated, dfil1, mode='full')
+        delayed=sig.convolve(self._decimated.Value, dfil1, mode='full')
 
         #Dummy filter to delay the payload signal
         dfil2=np.zeros((6,1))
         dfil2[-1,0]=1
-        self._delayed=sig.convolve(self.delayed, dfil2, mode='full')
+        delayed=sig.convolve(delayed, dfil2, mode='full')
+        if self.par:
+           self.queue.put(delayed)
+
+        self._delayed.Value=delayed
+        self.print_log({'type':'D', 'msg': "Internal delayed.shape for testing for user %i is %s" %(self.Userindex, self._delayed.Value.shape)})
+        
 
     def symbol_sync(self):
         #Matched filtering for short and long sequences and squaring for energy
         #Scale according to l2 norm
 
         #The maximum of this is sum of squares squared
-        matchedshort=np.abs(sig.convolve(self._decimated, self.Hstf, mode='full'))**2
-        matchedlong=(np.sum(np.abs(self.Hstf)**2)/np.sum(np.abs(self.Hltf)**2)*np.abs(sig.convolve(self._decimated, self.Hltf, mode='full')))**2
+        matchedshort=np.abs(sig.convolve(self._decimated.Value, self.Hstf, mode='full'))**2
+        matchedlong=(np.sum(np.abs(self.Hstf)**2)/np.sum(np.abs(self.Hltf)**2)*np.abs(sig.convolve(self._decimated.Value, self.Hltf, mode='full')))**2
 
         #Filter for energy filtering (average of 6 samples)
         Efil=np.ones((6,1))
@@ -192,7 +216,7 @@ class f2_dsp(rtl,thesdk):
                     indstart=indmaxprev
                     self.print_log({'type':'I', 'msg': "Found the Symbol boundary at sample %i" %(indmax)})
                     self.print_log({'type':'D','msg': "Indstart for user %i is %i" %(self.Userindex, indstart)})
-                    i+=128
+                    i+=256
                 else:
                     #usercount+=1
                     Smaxprev=0
@@ -208,15 +232,33 @@ class f2_dsp(rtl,thesdk):
                 Smaxprev=Smax
                 indmaxprev=indmax
                 i+=16
+
+        self.print_log({'type':'D','msg': "Length of the long sequence is %s" %(len(sg80211n.PLPCsyn_long))})
+ 
+        sync_index=int(indstart+2*len(sg80211n.PLPCsyn_long))+int(Efil.shape[0]/2)
+        ch_index=int(indch)+int(Efil.shape[0]/2)
+        self.print_log({'type':'D','msg': "Indstart is %i" %(indstart)})
+        self.print_log({'type':'D','msg': "Length of the long sequence is %s" %(len(sg80211n.PLPCsyn_long))})
+        self.print_log({'type':'D','msg': "sync_index is %s" %(sync_index)})
+
+        
+
+
         if self.par:
+            self.print_log({'type':'D', 'msg': "Putting sync_index for user %i: %s" %(self.Userindex,sync_index)})
+            self.queue.put(int(sync_index))
+            self.print_log({'type':'D', 'msg': "Putting ch_index for user %i: %s" %(self.Userindex,ch_index)})
+            self.queue.put(int(ch_index))
             self.queue.put(Sspikes_short)
             self.queue.put(Sspikes_sum)
-        self._sync_index=int(indstart+2*len(sg80211n.PLPCsyn_long))+int(Efil.shape[0]/2)
-        self._ch_index=int(indch)+int(Efil.shape[0]/2)
+
+        self._ch_index.Value=ch_index
         self._Frame_sync_short.Value=Sspikes_short
         self._Frame_sync_long.Value=Sspikes_sum
-        self.print_log({'type':'I', 'msg': "Start of the long preamble sequence is at %i" %(self._ch_index)})
-        self.print_log({'type':'I', 'msg': "Start of the user %i data is at %i" %(self.Userindex,self._sync_index)})
+        self.print_log({'type':'I', 'msg': "Start of the long preamble sequence is at %i" %(self._ch_index.Value)})
+        self.print_log({'type':'D','msg': "sync_index is %s" %(sync_index)})
+        self._sync_index.Value=sync_index
+        self.print_log({'type':'I', 'msg': "Start of the user %i data is at %i" %(self.Userindex,self._sync_index.Value)})
 
     def estimate_channel(self):
         #Offset is used to position the sampling istant in the middle of cyclic prefixes
@@ -225,7 +267,7 @@ class f2_dsp(rtl,thesdk):
         #channel egualization, as long as the delay offset is the same for long sequence and
         #payload frames
         offset=int(sg80211n.TGI2/2)+int(sg80211n.ofdm64dict_noguardband['CPlen']/2)
-        long_sequence=self._delayed[self._ch_index+offset:self._ch_index+offset+128,0].T
+        long_sequence=self._delayed.Value[self._ch_index.Value+offset:self._ch_index.Value+offset+128,0].T
         long_seq_freq=long_sequence.reshape((-1,64))
         long_seq_freq=np.sum(long_seq_freq,axis=0)
         long_seq_freq=np.fft.fft(long_seq_freq)
@@ -245,8 +287,13 @@ class f2_dsp(rtl,thesdk):
 
         channel_corr[0,data_and_pilot_loc+32]=1/channel_est[0,data_and_pilot_loc+32]
         self.print_log({'type':'D', 'msg':"Corrected channel dB is %s " %(20*np.log10(np.abs(channel_corr*channel_est)))}  )
-        self._channel_est=channel_est
-        self._channel_corr=channel_corr
+
+        if self.par:
+            self.queue.put(channel_est)
+            self.queue.put(channel_corr)
+
+        self._channel_est.Value=channel_est
+        self._channel_corr.Value=channel_corr
 
     def receive_symbols(self):
         #Ofdm manipulations start here
@@ -257,8 +304,10 @@ class f2_dsp(rtl,thesdk):
         data_and_pilot_loc=np.sort(np.r_[data_loc, pilot_loc])
         cyclicsymlen=int(sg80211n.ofdm64dict_noguardband['framelen']+sg80211n.ofdm64dict_noguardband['CPlen'])
 
-        #payload=self._delayed[self._sync_index+offset+2*len(sg80211n.PLPCsyn_long)::]
-        payload=self._delayed[self._sync_index+offset::]
+        #payload=self._delayed.Value[self._sync_index.Value+offset+2*len(sg80211n.PLPCsyn_long)::]
+        self.print_log({'type':'D', 'msg':"Sync index is %s " %(self._sync_index.Value)}  )
+
+        payload=self._delayed.Value[self._sync_index.Value+offset::]
         length=int(np.floor(payload.shape[0]/cyclicsymlen)*(cyclicsymlen))
         payload=payload[0:length,0]
         payload.shape=(1,-1)
@@ -268,7 +317,8 @@ class f2_dsp(rtl,thesdk):
         payload=payload[:,sg80211n.ofdm64dict_noguardband['CPlen']::]
         demod=np.fft.fft(payload,axis=1)
         demod=demod[:,sg80211n.Freqmap]
-        corr_mat=np.ones((demod.shape[0],1))@self._channel_corr
+        self.print_log({'type':'D', 'msg':"Corrected channel dB is %s " %(20*np.log10(np.abs(self._channel_corr.Value*self._channel_est.Value)))}  )
+        corr_mat=np.ones((demod.shape[0],1))@self._channel_corr.Value
         demod=np.multiply(demod,corr_mat)
         demod=demod[:,data_and_pilot_loc+int(sg80211n.ofdm64dict_noguardband['framelen']/2)]
         demod=demod.reshape(-1,1)
