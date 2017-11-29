@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 28.11.2017 14:41
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 28.11.2017 20:06
 import numpy as np
 import scipy.signal as sig
 import tempfile
@@ -24,6 +24,8 @@ class f2_dsp(rtl,thesdk):
         self.Hstf=1                      #filters for sybol sync
         self.Hltf=1
         self.iptr_A = refptr();
+        self.iptr_common_sync_index = refptr();
+        self.iptr_reception_vect=refptr()
         self.model='py';                 #can be set externally, but is not propagated
         self.DSPmode='cpu';              # [ 'local' | 'cpu' ]  
         self.par= False                  #By default, no parallel processing
@@ -34,14 +36,13 @@ class f2_dsp(rtl,thesdk):
         self._ch_index=refptr              #Signal index for the symbol synchronization
         self._channel_est=refptr()
         self._channel_corr=refptr()
-        self._reception_vect=refptr()
         self._symbols = refptr();
         self._wordstream = refptr();
         self._bitstream = refptr();
         self._Frame_sync_short = refptr();
         self._Frame_sync_long = refptr();
         self._classfile=__file__
-        self.DEBUG= False
+        self.DEBUG= True
         if len(arg)>=1:
             parent=arg[0]
             self.copy_propval(parent,self.proplist)
@@ -308,10 +309,16 @@ class f2_dsp(rtl,thesdk):
         data_and_pilot_loc=np.sort(np.r_[data_loc, pilot_loc])
         cyclicsymlen=int(sg80211n.ofdm64dict_noguardband['framelen']+sg80211n.ofdm64dict_noguardband['CPlen'])
 
-        #payload=self._delayed.Value[self._sync_index.Value+offset+2*len(sg80211n.PLPCsyn_long)::]
-        self.print_log({'type':'D', 'msg':"Sync index is %s " %(self._sync_index.Value)}  )
+        if self.DSPmode== 'local':
+            self.print_log({'type':'D', 'msg':"Sync index is %s " %(self._sync_index.Value)}  )
+            payload=self._delayed.Value[self._sync_index.Value+offset::]
+        elif self.DSPmode== 'cpu':
+            self.print_log({'type':'D', 'msg':"Sync index is %s " %(self.iptr_common_sync_index.Value)}  )
+            payload=self._delayed.Value[self.iptr_common_sync_index.Value+offset::]
+            #payload=self._delayed.Value[self._sync_index.Value+offset::]
+        else:
+            self.print_log({'type':'F', 'msg':"DSPmode %s not supported" })
 
-        payload=self._delayed.Value[self._sync_index.Value+offset::]
         length=int(np.floor(payload.shape[0]/cyclicsymlen)*(cyclicsymlen))
         payload=payload[0:length,0]
         payload.shape=(1,-1)
@@ -321,12 +328,12 @@ class f2_dsp(rtl,thesdk):
         payload=payload[:,sg80211n.ofdm64dict_noguardband['CPlen']::]
         demod=np.fft.fft(payload,axis=1)
         demod=demod[:,sg80211n.Freqmap]
-        self.print_log({'type':'D', 'msg':"Corrected channel dB is %s " %(20*np.log10(np.abs(self._channel_corr.Value*self._channel_est.Value)))}  )
 
         if self.DSPmode== 'local':
             corr_mat=np.ones((demod.shape[0],1))@self._channel_corr.Value
+            self.print_log({'type':'D', 'msg':"Corrected channel dB is %s " %(20*np.log10(np.abs(self._channel_corr.Value*self._channel_est.Value)))}  )
         elif self.DSPmode== 'cpu':
-            corr_mat=np.ones((demod.shape[0],1))@self._reception_vect.Value
+            corr_mat=np.ones((demod.shape[0],1))@self.iptr_reception_vect.Value
         else:
             self.print_log({'type':'F', 'msg':"DSPmode %s not supported" })
 
