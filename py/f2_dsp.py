@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 27.11.2017 18:47
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 28.11.2017 14:41
 import numpy as np
 import scipy.signal as sig
 import tempfile
@@ -16,7 +16,7 @@ import signal_generator_802_11n as sg80211n
 #Simple buffer template
 class f2_dsp(rtl,thesdk):
     def __init__(self,*arg): 
-        self.proplist = [ 'Rs', 'Rs_dsp', 'Hstf', 'Hltf', 'Users' ];    #properties that can be propagated from parent
+        self.proplist = [ 'Rs', 'Rs_dsp', 'Hstf', 'Hltf', 'Users', 'DSPmode' ];    #properties that can be propagated from parent
         self.Rs = 160e6;                 # sampling frequency
         self.Rs_dsp=20e6
         self.Users=1
@@ -25,6 +25,7 @@ class f2_dsp(rtl,thesdk):
         self.Hltf=1
         self.iptr_A = refptr();
         self.model='py';                 #can be set externally, but is not propagated
+        self.DSPmode='cpu';              # [ 'local' | 'cpu' ]  
         self.par= False                  #By default, no parallel processing
         self.queue= []                   #By default, no parallel processing
         self._decimated=refptr()               #signals sampled at Rs_dsp
@@ -33,6 +34,7 @@ class f2_dsp(rtl,thesdk):
         self._ch_index=refptr              #Signal index for the symbol synchronization
         self._channel_est=refptr()
         self._channel_corr=refptr()
+        self._reception_vect=refptr()
         self._symbols = refptr();
         self._wordstream = refptr();
         self._bitstream = refptr();
@@ -148,7 +150,6 @@ class f2_dsp(rtl,thesdk):
         decimated.shape=((-1,1)) 
         if self.par:
            self.queue.put(decimated)
-
         self._decimated.Value=decimated
     
     def delay_input(self):
@@ -185,7 +186,7 @@ class f2_dsp(rtl,thesdk):
         Sfil=np.zeros((65,1))
         Sfil[16:65:16]=1
         Sspikes_short=sig.convolve(Sshort,Sfil,mode='full')/np.sum(np.abs(Sfil))
-
+        
         #Compensate the matched long for the filter delays of the short
         delay=len(Sspikes_short)-len(Slong)
         Slong=np.r_['0',Slong, np.zeros((delay,1))]
@@ -199,7 +200,9 @@ class f2_dsp(rtl,thesdk):
         Smaxprev=0
         indmaxprev=0
         while usercount< self.Users and i+16<= len(Sspikes_sum):
+            self.print_log({'type':'D', 'msg': "Syncing user %i" %(usercount)})
             Testwin=(Sspikes_sum[i:i+16])
+            self.print_log({'type':'D', 'msg': "Testwin is %s" %(Testwin)})
             Smax=np.max(Testwin)
             indmax=i+np.argmax(Testwin,axis=0)
             
@@ -285,7 +288,8 @@ class f2_dsp(rtl,thesdk):
         pilot_loc=sg80211n.ofdm64dict_withguardband['pilot_loc']
         data_and_pilot_loc=np.sort(np.r_[data_loc, pilot_loc])
 
-        channel_corr[0,data_and_pilot_loc+32]=1/channel_est[0,data_and_pilot_loc+32]
+        #channel_corr[0,data_and_pilot_loc+32]=1/channel_est[0,data_and_pilot_loc+32]
+        channel_corr[0,data_and_pilot_loc+32]=np.conj(channel_est[0,data_and_pilot_loc+32])
         self.print_log({'type':'D', 'msg':"Corrected channel dB is %s " %(20*np.log10(np.abs(channel_corr*channel_est)))}  )
 
         if self.par:
@@ -318,12 +322,17 @@ class f2_dsp(rtl,thesdk):
         demod=np.fft.fft(payload,axis=1)
         demod=demod[:,sg80211n.Freqmap]
         self.print_log({'type':'D', 'msg':"Corrected channel dB is %s " %(20*np.log10(np.abs(self._channel_corr.Value*self._channel_est.Value)))}  )
-        corr_mat=np.ones((demod.shape[0],1))@self._channel_corr.Value
+
+        if self.DSPmode== 'local':
+            corr_mat=np.ones((demod.shape[0],1))@self._channel_corr.Value
+        elif self.DSPmode== 'cpu':
+            corr_mat=np.ones((demod.shape[0],1))@self._reception_vect.Value
+        else:
+            self.print_log({'type':'F', 'msg':"DSPmode %s not supported" })
+
         demod=np.multiply(demod,corr_mat)
         demod=demod[:,data_and_pilot_loc+int(sg80211n.ofdm64dict_noguardband['framelen']/2)]
         demod=demod.reshape(-1,1)
-        #demod=np.r_['0',demod,np.zeros(((len(self.delayed)-len(demod)),1),dtype=complex)]
-        #self.symbols=demod
 
         if self.par:
             self.queue.put(demod)
