@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 28.11.2017 20:06
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 29.11.2017 17:21
 import numpy as np
 import scipy.signal as sig
 import tempfile
@@ -27,6 +27,7 @@ class f2_dsp(rtl,thesdk):
         self.iptr_common_sync_index = refptr();
         self.iptr_reception_vect=refptr()
         self.model='py';                 #can be set externally, but is not propagated
+        #self.DSPmode='local';              # [ 'local' | 'cpu' ]  
         self.DSPmode='cpu';              # [ 'local' | 'cpu' ]  
         self.par= False                  #By default, no parallel processing
         self.queue= []                   #By default, no parallel processing
@@ -271,6 +272,7 @@ class f2_dsp(rtl,thesdk):
         #channel egualization, as long as the delay offset is the same for long sequence and
         #payload frames
         offset=int(sg80211n.TGI2/2)+int(sg80211n.ofdm64dict_noguardband['CPlen']/2)
+        #offset=int(sg80211n.TGI2/2)+int(sg80211n.ofdm64dict_noguardband['CPlen']/2-3)
         long_sequence=self._delayed.Value[self._ch_index.Value+offset:self._ch_index.Value+offset+128,0].T
         long_seq_freq=long_sequence.reshape((-1,64))
         long_seq_freq=np.sum(long_seq_freq,axis=0)
@@ -280,7 +282,6 @@ class f2_dsp(rtl,thesdk):
         long_seq_freq=long_seq_freq[sg80211n.Freqmap]
 
         #Estimate the channel
-        #channel_est=np.multiply(np.sum(long_seq_freq,axis=0),sg80211n.PLPCsyn_long.T)
         channel_est=np.multiply(long_seq_freq,sg80211n.PLPCsyn_long.T)
         self.print_log({'type':'D', 'msg':"Channel estimate in dB is %s " %(20*np.log10(np.abs(channel_est)/np.max(np.abs(channel_est))))}  )
         channel_corr=np.zeros_like(channel_est)
@@ -289,9 +290,8 @@ class f2_dsp(rtl,thesdk):
         pilot_loc=sg80211n.ofdm64dict_withguardband['pilot_loc']
         data_and_pilot_loc=np.sort(np.r_[data_loc, pilot_loc])
 
-        #channel_corr[0,data_and_pilot_loc+32]=1/channel_est[0,data_and_pilot_loc+32]
         channel_corr[0,data_and_pilot_loc+32]=np.conj(channel_est[0,data_and_pilot_loc+32])
-        self.print_log({'type':'D', 'msg':"Corrected channel dB is %s " %(20*np.log10(np.abs(channel_corr*channel_est)))}  )
+        self.print_log({'type':'D', 'msg':"Corrected channel  is %s " %(1/np.conj(channel_corr)*channel_est)}  )
 
         if self.par:
             self.queue.put(channel_est)
@@ -304,16 +304,18 @@ class f2_dsp(rtl,thesdk):
         #Ofdm manipulations start here
         #Start the OFDM demodulation here
         offset=int(sg80211n.TGI2/2)+int(sg80211n.ofdm64dict_noguardband['CPlen']/2)
+        #offset=int(sg80211n.TGI2/2)+int(sg80211n.ofdm64dict_noguardband['CPlen']/2-3)
         data_loc=sg80211n.ofdm64dict_withguardband['data_loc']
         pilot_loc=sg80211n.ofdm64dict_withguardband['pilot_loc']
         data_and_pilot_loc=np.sort(np.r_[data_loc, pilot_loc])
         cyclicsymlen=int(sg80211n.ofdm64dict_noguardband['framelen']+sg80211n.ofdm64dict_noguardband['CPlen'])
 
         if self.DSPmode== 'local':
-            self.print_log({'type':'D', 'msg':"Sync index is %s " %(self._sync_index.Value)}  )
+            self.print_log({'type':'D', 'msg':"Local Sync index is %s " %(self._sync_index.Value)}  )
             payload=self._delayed.Value[self._sync_index.Value+offset::]
         elif self.DSPmode== 'cpu':
-            self.print_log({'type':'D', 'msg':"Sync index is %s " %(self.iptr_common_sync_index.Value)}  )
+            self.print_log({'type':'D', 'msg':"Local Sync index would be %s " %(self._sync_index.Value)}  )
+            self.print_log({'type':'D', 'msg':"Common Sync index is %s " %(self.iptr_common_sync_index.Value)}  )
             payload=self._delayed.Value[self.iptr_common_sync_index.Value+offset::]
             #payload=self._delayed.Value[self._sync_index.Value+offset::]
         else:
@@ -330,10 +332,15 @@ class f2_dsp(rtl,thesdk):
         demod=demod[:,sg80211n.Freqmap]
 
         if self.DSPmode== 'local':
-            corr_mat=np.ones((demod.shape[0],1))@self._channel_corr.Value
-            self.print_log({'type':'D', 'msg':"Corrected channel dB is %s " %(20*np.log10(np.abs(self._channel_corr.Value*self._channel_est.Value)))}  )
+            corr_value=1/self._channel_est.Value
+            corr_mat=np.ones((demod.shape[0],1))@corr_value
+            self.print_log({'type':'D', 'msg':"Corrected channel for user %s is %s " %(self.Userindex, corr_value*self._channel_est.Value)}  )
         elif self.DSPmode== 'cpu':
             corr_mat=np.ones((demod.shape[0],1))@self.iptr_reception_vect.Value
+            #corr_value=self.iptr_reception_vect.Value
+            #corr_mat=np.ones((demod.shape[0],1))@corr_value
+            self.print_log({'type':'D', 'msg':"Corrected channel for user %s is %s " %(self.Userindex, self.iptr_reception_vect.Value
+*self._channel_est.Value)}  )
         else:
             self.print_log({'type':'F', 'msg':"DSPmode %s not supported" })
 
