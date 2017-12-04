@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 29.11.2017 17:21
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 30.11.2017 20:28
 import numpy as np
 import scipy.signal as sig
 import tempfile
@@ -24,7 +24,7 @@ class f2_dsp(rtl,thesdk):
         self.Hstf=1                      #filters for sybol sync
         self.Hltf=1
         self.iptr_A = refptr();
-        self.iptr_common_sync_index = refptr();
+        self.iptr_cpu_sync_index = refptr();
         self.iptr_reception_vect=refptr()
         self.model='py';                 #can be set externally, but is not propagated
         #self.DSPmode='local';              # [ 'local' | 'cpu' ]  
@@ -315,8 +315,8 @@ class f2_dsp(rtl,thesdk):
             payload=self._delayed.Value[self._sync_index.Value+offset::]
         elif self.DSPmode== 'cpu':
             self.print_log({'type':'D', 'msg':"Local Sync index would be %s " %(self._sync_index.Value)}  )
-            self.print_log({'type':'D', 'msg':"Common Sync index is %s " %(self.iptr_common_sync_index.Value)}  )
-            payload=self._delayed.Value[self.iptr_common_sync_index.Value+offset::]
+            self.print_log({'type':'D', 'msg':"Common Sync index is %s " %(self.iptr_cpu_sync_index.Value)}  )
+            payload=self._delayed.Value[self.iptr_cpu_sync_index.Value+offset::]
             #payload=self._delayed.Value[self._sync_index.Value+offset::]
         else:
             self.print_log({'type':'F', 'msg':"DSPmode %s not supported" })
