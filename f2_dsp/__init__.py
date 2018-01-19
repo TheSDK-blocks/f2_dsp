@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 04.12.2017 21:13
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 19.01.2018 14:15
 import numpy as np
 import scipy.signal as sig
 import tempfile
@@ -9,12 +9,12 @@ import time
 
 from refptr import *
 from thesdk import *
-from rtl import *
+from f2_decimator import *
 import signal_generator_802_11n as sg80211n
 
 
 #Simple buffer template
-class f2_dsp(rtl,thesdk):
+class f2_dsp(thesdk):
     def __init__(self,*arg): 
         self.proplist = [ 'Rs', 'Rs_dsp', 'Hstf', 'Hltf', 'Users', 'DSPmode' ];    #properties that can be propagated from parent
         self.Rs = 160e6;                 # sampling frequency
@@ -26,7 +26,8 @@ class f2_dsp(rtl,thesdk):
         self.iptr_A = refptr();
         self.iptr_reception_vect=refptr()
         self.model='py';                 #can be set externally, but is not propagated
-        #self.dspmode='local';              # [ 'local' | 'cpu' ]  
+        self.dsp_decimator_model='sv'
+        self.rtldiscard=50
         self.DSPmode='cpu';              # [ 'local' | 'cpu' ]  
         self.par= False                  #by default, no parallel processing
         self.queue= []                   #by default, no parallel processing
@@ -58,37 +59,15 @@ class f2_dsp(rtl,thesdk):
         self.iptr_reception_vect.Value=[refptr() for i in range(self.Users)]
 
     def init(self):
-        self.def_rtl()
-        rndpart=os.path.basename(tempfile.mkstemp()[1])
-        self._infile=self._rtlsimpath +'/a_' + rndpart +'.txt'
-        self._outfile=self._rtlsimpath +'/z_' + rndpart +'.txt'
-        self._rtlcmd=self.get_rtlcmd()
+        #Add sublocks
+        self.decimator=f2_decimator()
+        self.decimator.Rs_high=self.Rs
+        self.decimator.Rs_low=self.Rs_dsp
+        self.decimator.model=self.dsp_decimator_model
+        self.decimator.iptr_A=self.iptr_A
+        self.decimator.scales=[1,2^10,1,1]
+        self.decimator.init()
 
-    def get_rtlcmd(self):
-        #the could be gathered to rtl class in some way but they are now here for clarity
-        submission = ' bsub -q normal '  
-        rtllibcmd =  'vlib ' +  self._workpath + ' && sleep 2'
-        rtllibmapcmd = 'vmap work ' + self._workpath
-
-        if (self.model is 'vhdl'):
-            rtlcompcmd = ( 'vcom ' + self._rtlsrcpath + '/' + self._name + '.vhd '
-                          + self._rtlsrcpath + '/tb_'+ self._name+ '.vhd' )
-            rtlsimcmd =  ( 'vsim -64 -batch -t 1ps -g g_infile=' + 
-                           self._infile + ' -g g_outfile=' + self._outfile 
-                           + ' work.tb_' + self._name + ' -do "run -all; quit -f;"')
-            rtlcmd =  submission + rtllibcmd  +  ' && ' + rtllibmapcmd + ' && ' + rtlcompcmd +  ' && ' + rtlsimcmd
-
-        elif (self.model is 'sv'):
-            rtlcompcmd = ( 'vlog -work work ' + self._rtlsrcpath + '/' + self._name + '.sv '
-                           + self._rtlsrcpath + '/tb_' + self._name +'.sv')
-            rtlsimcmd = ( 'vsim -64 -batch -t 1ps -voptargs=+acc -g g_infile=' + self._infile
-                          + ' -g g_outfile=' + self._outfile + ' work.tb_' + self._name  + ' -do "run -all; quit;"')
-
-            rtlcmd =  submission + rtllibcmd  +  ' && ' + rtllibmapcmd + ' && ' + rtlcompcmd +  ' && ' + rtlsimcmd
-
-        else:
-            rtlcmd=[]
-        return rtlcmd
 
     def get_channel_estimate(self,*arg):
         if len(arg)>0:
@@ -119,45 +98,19 @@ class f2_dsp(rtl,thesdk):
             self.receive_data()
 
         else: 
-          try:
-              os.remove(self._infile)
-          except:
-              pass
-          fid=open(self._infile,'wb')
-          np.savetxt(fid,np.transpose(self.iptr_a.Value),fmt='%.0f')
-          #np.savetxt(fid,np.transpose(inp),fmt='%.0f')
-          fid.close()
-          while not os.path.isfile(self._infile):
-              self.print_log({'type':'i', 'msg':"wait infile to appear"})
-              time.sleep(1)
-          try:
-              os.remove(self._outfile)
-          except:
-              pass
-          self.print_log({'type':'i', 'msg':"running external command %s\n" %(self._rtlcmd) })
-          subprocess.call(shlex.split(self._rtlcmd));
-          
-          while not os.path.isfile(self._outfile):
-              self.print_log({'type':'i', 'msg':"wait outfile to appear"})
-              time.sleep(1)
-          fid=open(self._outfile,'r')
-          #fid=open(self._infile,'r')
-          #out = .np.loadtxt(fid)
-          out = np.transpose(np.loadtxt(fid))
-          fid.close()
-          if self.par:
-              self.queue.put(out)
-          self._z.Value=out
-          os.remove(self._infile)
-          os.remove(self._outfile)
+            self.print_log({'type':'I', 'msg':'Copy the verilog simulations setup from f2_decimator'})
 
     def decimate_input(self):
-        #this is teh simplest form of decimation
-        decimated=np.array(self.iptr_A.Value[0::int(self.Rs/self.Rs_dsp)],ndmin=2)
-        decimated.shape=((-1,1)) 
+        self.decimator.run()
+        #Simple energy detector
+        discard=np.nonzero(np.abs(self.decimator._Z.Value.reshape((-1,1)))>0)[0][0]
+        
+        decimated=self.decimator._Z.Value.reshape((-1,1))[self.rtldiscard::,0].reshape((-1,1))
+        self.print_log({'type':'W', 'msg':'Discarded %i zero samples to remove possibble initial transients in symbol sync.' %(self.rtldiscard)})
         if self.par:
            self.queue.put(decimated)
         self._decimated.Value=decimated
+        print(decimated.shape)
     
     def delay_input(self):
         #dummy filter to delay the payload signal in paralled with symbol sync
