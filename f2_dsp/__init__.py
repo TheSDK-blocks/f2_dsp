@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 19.01.2018 14:15
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 19.01.2018 14:35
 import numpy as np
 import scipy.signal as sig
 import tempfile
@@ -16,7 +16,7 @@ import signal_generator_802_11n as sg80211n
 #Simple buffer template
 class f2_dsp(thesdk):
     def __init__(self,*arg): 
-        self.proplist = [ 'Rs', 'Rs_dsp', 'Hstf', 'Hltf', 'Users', 'DSPmode' ];    #properties that can be propagated from parent
+        self.proplist = [ 'Rs', 'Rs_dsp', 'Hstf', 'Hltf', 'Users', 'DSPmode','dsp_decimator_model', 'dsp_decimator_scales' ];    #properties that can be propagated from parent
         self.Rs = 160e6;                 # sampling frequency
         self.Rs_dsp=20e6
         self.Users=1
@@ -26,7 +26,8 @@ class f2_dsp(thesdk):
         self.iptr_A = refptr();
         self.iptr_reception_vect=refptr()
         self.model='py';                 #can be set externally, but is not propagated
-        self.dsp_decimator_model='sv'
+        self.dsp_decimator_model='py'
+        self.dsp_decimator_scales=[1,1,1,1]
         self.rtldiscard=50
         self.DSPmode='cpu';              # [ 'local' | 'cpu' ]  
         self.par= False                  #by default, no parallel processing
@@ -65,7 +66,7 @@ class f2_dsp(thesdk):
         self.decimator.Rs_low=self.Rs_dsp
         self.decimator.model=self.dsp_decimator_model
         self.decimator.iptr_A=self.iptr_A
-        self.decimator.scales=[1,2^10,1,1]
+        self.decimator.scales=self.dsp_decimator_scales
         self.decimator.init()
 
 
