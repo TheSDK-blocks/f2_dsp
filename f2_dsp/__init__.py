@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 15.08.2018 19:26
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 15.08.2018 19:37
 #Add TheSDK to path. Importing it first adds the rest of the modules
 #Simple buffer template
 import os
@@ -97,7 +97,7 @@ class f2_dsp(verilog,thesdk):
                 self.tx_dsp.run()
             else:    
                 self.print_log({'type':'F', 'msg': "Python model not available for TX DSP"})
-        elif self.mode=='sv'
+        elif self.mode=='sv':
             self.write_infile_tx()
             self.run_verilog()
             self.read_outfile_tx()
@@ -106,7 +106,7 @@ class f2_dsp(verilog,thesdk):
         if self.model=='py':
             self.rx_dsp.init()
             self.rx_dsp.run()
-        elif self.mode=='sv'
+        elif self.mode=='sv':
             self.write_infile_rx()
             self.run_verilog()
             self.read_outfile_rx()
