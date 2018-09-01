@@ -1,18 +1,15 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 15.08.2018 19:37
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 31.08.2018 22:38
 #Add TheSDK to path. Importing it first adds the rest of the modules
 #Simple buffer template
 import os
 import sys
-if not (os.path.abspath('../../thesdk') in sys.path):
-    sys.path.append(os.path.abspath('../../thesdk'))
-
 import numpy as np
 import tempfile
 
 from thesdk import *
 from verilog import *
-from f2_util_classes import *
+from f2_util_classes import * #Iofifosigs are here
 from f2_tx_dsp import *
 from f2_rx_dsp import *
 
@@ -40,14 +37,16 @@ class f2_dsp(verilog,thesdk):
         self.iptr_A=refptr()
         self.dsp_decimator_model='py'
         self.dsp_decimator_scales=[1,1,1,1]
+        self.dsp_tx_scales=[8,2,2,512]
+        self.dsp_tx_cic3shift=4
         self.noisetemp=290
         self.Rs=160e6
         self.Rs_dsp=20e6
         self.Hstf=1                             #Synchronization filter
-        self.rx_dsp=[]
-        self.tx_dsp=[]
+        self.rx_output_mode=1
         self.nserdes=1
         self.DEBUG= False
+        self.par=False
         if len(arg)>=1:
             parent=arg[0]
             self.copy_propval(parent,self.proplist)
@@ -62,11 +61,9 @@ class f2_dsp(verilog,thesdk):
         #Rx and tx refer to serdes lane tx is the transmitter input of the serdes
         self._io_lanes_tx=[ iofifosigs(**{'users':self.Users}) for _ in range(self.nserdes)] #this is an output
         self._io_lanes_rx=[ iofifosigs(**{'users':self.Users}) for _ in range(self.nserdes)] #this is an input
-        self.init()
-    def init(self):
+
         #This is the definition for the Transceiver system
         # Aim is to make it resemple the actual circuit as closely as possible
-
         #Tx
         self.tx_dsp=f2_tx_dsp(self)
 
@@ -90,6 +87,42 @@ class f2_dsp(verilog,thesdk):
             #Are connceted to tx_input. Ensure to drive only one
             self._io_lanes_rx[i]=self.tx_dsp.iptr_A
 
+        self.init()
+
+    def init(self):
+        self.def_verilog()
+        self._vlogmodulefiles =list(['clkdiv_n_2_4_8.v', 'AsyncResetReg.v'])
+        #Here's how we sim't for the tapeout
+
+        self._vlogparameters=dict([ ('g_Rs_high',self.Rs), ('g_Rs_low',self.Rs_dsp), 
+            ('g_tx_shift'            , 0),
+            ('g_tx_scale0'           , self.dsp_tx_scales[0]),
+            ('g_tx_scale1'           , self.dsp_tx_scales[1]),
+            ('g_tx_scale2'           , self.dsp_tx_scales[2]),
+            ('g_tx_scale3'           , self.dsp_tx_scales[3]),
+            ('g_tx_cic3shift'        , self.dsp_tx_cic3shift),
+            ('g_tx_user_spread_mode' , 0),
+            ('g_tx_user_sum_mode'    , 0),
+            ('g_tx_user_select_index', 0),
+            ('g_tx_interpolator_mode', 4),
+            ('g_tx_dac_data_mode'    , 6),
+            ('g_rx_shift'            , 0),
+            ('g_rx_scale0',self.dsp_decimator_scales[0]),  
+            ('g_rx_scale1',self.dsp_decimator_scales[1]),  
+            ('g_rx_scale2',self.dsp_decimator_scales[2]),  
+            ('g_rx_scale3',self.dsp_decimator_scales[3]),
+            ('g_rx_mode',self.rx_dsp.mode), ##Propagates from decimator. Check if this is ok
+            ('g_rx_user_index', 0),
+            ('g_rx_antenna_index', 0),
+            ('g_rx_output_mode', self.rx_output_mode), 
+            ('g_rx_input_mode', 0),
+            ("g_rx_mode",4),
+            ("g_rx_inv_adc_clk_pol",1),
+            ('g_rx_adc_fifo_lut_mode' ,2),
+            ("g_lane_refclk_Ndiv",2), #This should be at least 8x bb
+            ("g_lane_refclk_shift","0")
+            ])
+
     def run_tx(self):
         if self.model=='py':
             if self.tx_dsp.model=='sv':
@@ -97,50 +130,96 @@ class f2_dsp(verilog,thesdk):
                 self.tx_dsp.run()
             else:    
                 self.print_log({'type':'F', 'msg': "Python model not available for TX DSP"})
-        elif self.mode=='sv':
-            self.write_infile_tx()
+        elif self.model=='sv':
+            self.write_infile()
+            a=verilog_iofile(self,**{'name':'Z'})
+            a.simparam='-g g_io_Z='+a.file
+            b=verilog_iofile(self,**{'name':'lanes_tx'})
+            b.simparam='-g g_io_lanes_tx='+b.file
             self.run_verilog()
-            self.read_outfile_tx()
+            self.read_outfile()
+            if not self.preserve_iofiles:
+                for i in self.iofiles:
+                    i.remove()
 
     def run_rx(self):
         if self.model=='py':
             self.rx_dsp.init()
             self.rx_dsp.run()
-        elif self.mode=='sv':
-            self.write_infile_rx()
+        elif self.model=='sv':
+            self.write_infile()
+            #define outfiles
+            a=verilog_iofile(self,**{'name':'Z'})
+            a.simparam='-g g_io_Z='+a.file
+            b=verilog_iofile(self,**{'name':'lanes_tx'})
+            b.simparam='-g g_io_lanes_tx='+b.file
             self.run_verilog()
-            self.read_outfile_rx()
+            self.read_outfile()
+            if not self.preserve_iofiles:
+                for i in self.iofiles:
+                    i.remove()
 
     def write_infile(self):
-        rndpart=os.path.basename(tempfile.mkstemp()[1])
-        if self.model=='sv':
-            self._infile=self._vlogsimpath +'/A_' + rndpart +'.txt'
-            self._outfile=self._vlogsimpath +'/Z_' + rndpart +'.txt'
-        elif self.model=='vhdl':
-            self._infile=self._vhdlsimpath +'/A_' + rndpart +'.txt'
-            self._outfile=self._vhdlsimpath +'/Z_' + rndpart +'.txt'
-        else:
-            pass
-        try:
-          os.remove(self._infile)
-        except:
-          pass
-        fid=open(self._infile,'wb')
-        np.savetxt(fid,np.transpose(self.iptr_A.Value),fmt='%.0f')
-        #np.savetxt(fid,self.iptr_A.Value.reshape(-1,1).view(float),fmt='%i', delimiter='\t')
-        fid.close()
+        for i in range(self.nserdes):
+            for k in range(self.Users):
+                if i==0 and k==0:
+                    indata=self._io_lanes_rx[i].data[k].udata.Value.reshape(-1,1)
+                else:
+                    indata=np.r_['1',indata,self._io_lanes_rx[i].data[k].udata.Value.reshape(-1,1)]
+        #This adds an iofile to self.iiofiles list
+        a=verilog_iofile(self,**{'name':'io_lanes_rx','data':indata})
+        a.simparam='-g g_io_lanes_rx='+a.file
+        a.write()
+        indata=None #Clear variable to save memory
+
+        for i in range(self.Users):
+            if i==0:
+                indata=self.iptr_A.Value[i].Value.reshape(-1,1)
+            else:
+                indata=np.r_['1',indata,self.iptr_A.Value[i].Value.reshape(-1,1)]
+        #This adds an iofile to self.iiofiles list
+        a=verilog_iofile(self,**{'name':'A','data':indata})
+        a.simparam='-g g_io_iptr_A='+a.file
+        a.write()
+        indata=None #Clear variable to save memory
 
     def read_outfile(self):
-        fid=open(self._outfile,'r')
-        out = np.transpose(np.loadtxt(fid))
-        #out = np.loadtxt(fid,dtype=complex)
-        #Of course it does not work symmetrically with savetxt
-        #out=(out[:,0]+1j*out[:,1]).reshape(-1,1) 
-        fid.close()
-        os.remove(self._outfile)
-        if self.par:
-            self.queue.put(out)
-        self._Z.Value=out
+        #Handle the ofiles here as you see the best
+        a=list(filter(lambda x:x.name=='Z',self.iofiles))[0]
+        a.read(**{'dtype':'object'})
+        for i in range(self.Txantennas):
+            self._Z_real_t[i].Value=a.data[:,i*self.Txantennas+0].astype('str').reshape(-1,1)
+            self._Z_real_b[i].Value=a.data[:,i*self.Txantennas+1].astype('int').reshape(-1,1)
+            self._Z_imag_t[i].Value=a.data[:,i*self.Txantennas+2].astype('str').reshape(-1,1)
+            self._Z_imag_b[i].Value=a.data[:,i*self.Txantennas+3].astype('int').reshape(-1,1)
+        a=None
+        a=list(filter(lambda x:x.name=='lanes_tx',self.iofiles))[0]
+        a.read(**{'dtype':'object'})
+        fromfile=a.data.astype('int')
+        for i in range(self.Users):
+            if i==0:
+                out=np.zeros((fromfile.shape[0],int(fromfile.shape[1]/2)),dtype=complex)
+                out[:,i]=(fromfile[:,2*i]+1j*fromfile[:,2*i+1]) 
+            else:
+                out[:,i]=(fromfile[:,2*i]+1j*fromfile[:,2*i+1])
+            maximum=np.amax([np.abs(np.real(out[:,i])), np.abs(np.imag(out[:,i]))])
+            str="Output signal range is %i" %(maximum)
+            self.print_log({'type':'I', 'msg': str})
+        for k in range(self.Users):
+            self._io_lanes_tx[0].data[k].udata.Value=out[:,k].reshape((-1,1))
+        a=None
+
+        self.distribute_result()
+
+    def distribute_result(self):
+        for k in range(self.Users):
+            if self.par:
+                self.queue.put(self._io_lanes_tx[0].data[k].udata.Value.reshape(-1,1))
+                for i in range(self.Txantennas):
+                    self.queue.put(self._Z_real_t[i].Value.reshape(-1,1)) 
+                    self.queue.put(self._Z_real_b[i].Value.reshape(-1,1))
+                    self.queue.put(self._Z_imag_t[i].Value.reshape(-1,1))
+                    self.queue.put(self._Z_imag_b[i].Value.reshape(-1,1))
 
 if __name__=="__main__":
     import matplotlib.pyplot as plt
