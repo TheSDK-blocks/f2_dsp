@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 04.09.2018 23:35
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 05.09.2018 11:18
 #Add TheSDK to path. Importing it first adds the rest of the modules
 #Simple buffer template
 import os
@@ -20,7 +20,26 @@ class f2_dsp(verilog,thesdk):
         return os.path.dirname(os.path.realpath(__file__)) + "/"+__name__
 
     def __init__(self,*arg): 
-        self.proplist=[ 'rxmodels', 'Txantennas', 'Txpower', 'Rxantennas', 'Users', 'Disableuser', 'Nbits', 'Txbits', 'Channeldir', 'CPUFBMODE', 'DSPmode', 'dsp_decimator_model', 'dsp_decimator_scales', 'dsp_decimator_cic3shift','noisetemp', 'Rs', 'Rs_dsp', 'Hstf', 'ofdmdict' ,'nserdes' ]; 
+        self.proplist=[ 'rxmodels', 
+                        'Txantennas', 
+                        'Txpower', 
+                        'Rxantennas', 
+                        'Users', 
+                        'Disableuser', 
+                        'Nbits',   #Receiver ADC
+                        'Txbits',  #Transmitter DAC
+                        'Channeldir', 
+                        'CPUFBMODE', 
+                        'DSPmode', 
+                        'dsp_decimator_scales',     # Scales for the rx decimator chain
+                        'dsp_decimator_cic3shift',  # Left-shift for the decimator cic integrator
+                        'rx_output_mode',
+                        'noisetemp', 
+                        'Rs', 
+                        'Rs_dsp', 
+                        'Hstf', 
+                        'ofdmdict' ,
+                        'nserdes' ]; 
         self.rxmodels=[]
         #Signals should be in form s(user,time,Txantenna)
         self.Txantennas=4                       #All the antennas process the same data
@@ -43,7 +62,7 @@ class f2_dsp(verilog,thesdk):
         self.noisetemp=290
         self.Rs=160e6
         self.Rs_dsp=20e6
-        self.Hstf=1                             #Synchronization filter
+        #self.Hstf=1                             #Synchronization filter
         self.rx_output_mode=1
         self.nserdes=1
         self.DEBUG= False
