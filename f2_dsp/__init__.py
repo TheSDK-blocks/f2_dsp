@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 31.08.2018 22:38
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 04.09.2018 23:35
 #Add TheSDK to path. Importing it first adds the rest of the modules
 #Simple buffer template
 import os
@@ -20,7 +20,7 @@ class f2_dsp(verilog,thesdk):
         return os.path.dirname(os.path.realpath(__file__)) + "/"+__name__
 
     def __init__(self,*arg): 
-        self.proplist=[ 'rxmodels', 'Txantennas', 'Txpower', 'Rxantennas', 'Users', 'Disableuser', 'Nbits', 'Txbits', 'Channeldir', 'CPUFBMODE', 'DSPmode', 'dsp_decimator_model', 'dsp_decimator_scales', 'noisetemp', 'Rs', 'Rs_dsp', 'Hstf', 'ofdmdict' ,'nserdes' ]; 
+        self.proplist=[ 'rxmodels', 'Txantennas', 'Txpower', 'Rxantennas', 'Users', 'Disableuser', 'Nbits', 'Txbits', 'Channeldir', 'CPUFBMODE', 'DSPmode', 'dsp_decimator_model', 'dsp_decimator_scales', 'dsp_decimator_cic3shift','noisetemp', 'Rs', 'Rs_dsp', 'Hstf', 'ofdmdict' ,'nserdes' ]; 
         self.rxmodels=[]
         #Signals should be in form s(user,time,Txantenna)
         self.Txantennas=4                       #All the antennas process the same data
@@ -37,6 +37,7 @@ class f2_dsp(verilog,thesdk):
         self.iptr_A=refptr()
         self.dsp_decimator_model='py'
         self.dsp_decimator_scales=[1,1,1,1]
+        self.dsp_decimator_cic3shift=0
         self.dsp_tx_scales=[8,2,2,512]
         self.dsp_tx_cic3shift=4
         self.noisetemp=290
@@ -87,6 +88,12 @@ class f2_dsp(verilog,thesdk):
             #Are connceted to tx_input. Ensure to drive only one
             self._io_lanes_rx[i]=self.tx_dsp.iptr_A
 
+        self.DEBUG= False
+        if len(arg)>=1:
+            parent=arg[0]
+            self.copy_propval(parent,self.proplist)
+            self.parent =parent;
+
         self.init()
 
     def init(self):
@@ -111,12 +118,12 @@ class f2_dsp(verilog,thesdk):
             ('g_rx_scale1',self.dsp_decimator_scales[1]),  
             ('g_rx_scale2',self.dsp_decimator_scales[2]),  
             ('g_rx_scale3',self.dsp_decimator_scales[3]),
+            ('g_rx_cic3shift', self.dsp_decimator_cic3shift),
             ('g_rx_mode',self.rx_dsp.mode), ##Propagates from decimator. Check if this is ok
             ('g_rx_user_index', 0),
             ('g_rx_antenna_index', 0),
             ('g_rx_output_mode', self.rx_output_mode), 
             ('g_rx_input_mode', 0),
-            ("g_rx_mode",4),
             ("g_rx_inv_adc_clk_pol",1),
             ('g_rx_adc_fifo_lut_mode' ,2),
             ("g_lane_refclk_Ndiv",2), #This should be at least 8x bb
@@ -134,13 +141,11 @@ class f2_dsp(verilog,thesdk):
             self.write_infile()
             a=verilog_iofile(self,**{'name':'Z'})
             a.simparam='-g g_io_Z='+a.file
-            b=verilog_iofile(self,**{'name':'lanes_tx'})
+            b=verilog_iofile(self,**{'name':'io_lanes_tx'})
             b.simparam='-g g_io_lanes_tx='+b.file
             self.run_verilog()
             self.read_outfile()
-            if not self.preserve_iofiles:
-                for i in self.iofiles:
-                    i.remove()
+            del self.iofiles
 
     def run_rx(self):
         if self.model=='py':
@@ -151,13 +156,11 @@ class f2_dsp(verilog,thesdk):
             #define outfiles
             a=verilog_iofile(self,**{'name':'Z'})
             a.simparam='-g g_io_Z='+a.file
-            b=verilog_iofile(self,**{'name':'lanes_tx'})
+            b=verilog_iofile(self,**{'name':'io_lanes_tx'})
             b.simparam='-g g_io_lanes_tx='+b.file
             self.run_verilog()
             self.read_outfile()
-            if not self.preserve_iofiles:
-                for i in self.iofiles:
-                    i.remove()
+            del self.iofiles
 
     def write_infile(self):
         for i in range(self.nserdes):
@@ -193,12 +196,15 @@ class f2_dsp(verilog,thesdk):
             self._Z_imag_t[i].Value=a.data[:,i*self.Txantennas+2].astype('str').reshape(-1,1)
             self._Z_imag_b[i].Value=a.data[:,i*self.Txantennas+3].astype('int').reshape(-1,1)
         a=None
-        a=list(filter(lambda x:x.name=='lanes_tx',self.iofiles))[0]
+        a=list(filter(lambda x:x.name=='io_lanes_tx',self.iofiles))[0]
         a.read(**{'dtype':'object'})
         fromfile=a.data.astype('int')
+        print(fromfile.shape)
         for i in range(self.Users):
+            cols=3 # Real, Imag x 4 x 2 Udata discarded
+            ## for now Lets take only the lane 0
             if i==0:
-                out=np.zeros((fromfile.shape[0],int(fromfile.shape[1]/2)),dtype=complex)
+                out=np.zeros((fromfile.shape[0],int(fromfile.shape[1]/(2*1))),dtype=complex)
                 out[:,i]=(fromfile[:,2*i]+1j*fromfile[:,2*i+1]) 
             else:
                 out[:,i]=(fromfile[:,2*i]+1j*fromfile[:,2*i+1])
