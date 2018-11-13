@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 05.09.2018 11:18
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 12.11.2018 15:20
 #Add TheSDK to path. Importing it first adds the rest of the modules
 #Simple buffer template
 import os
@@ -95,8 +95,7 @@ class f2_dsp(verilog,thesdk):
 
         # Rx 
         self.rx_dsp=f2_rx_dsp(self)
-        self.iptr_A=self.rx_dsp.iptr_A
-
+        self.iptr_A=self.rx_dsp.iptr_A        
         #This is quick and dirty. Must redefine proper IO structure later on
         # and add the switchbox 
         for i in range(self.nserdes):
@@ -106,7 +105,6 @@ class f2_dsp(verilog,thesdk):
             #All serdes rx_s have the same data
             #Are connceted to tx_input. Ensure to drive only one
             self._io_lanes_rx[i]=self.tx_dsp.iptr_A
-
         self.DEBUG= False
         if len(arg)>=1:
             parent=arg[0]
@@ -218,7 +216,6 @@ class f2_dsp(verilog,thesdk):
         a=list(filter(lambda x:x.name=='io_lanes_tx',self.iofiles))[0]
         a.read(**{'dtype':'object'})
         fromfile=a.data.astype('int')
-        print(fromfile.shape)
         for i in range(self.Users):
             cols=3 # Real, Imag x 4 x 2 Udata discarded
             ## for now Lets take only the lane 0
