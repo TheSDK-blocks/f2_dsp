@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 12.11.2018 15:20
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 15.11.2018 11:46
 #Add TheSDK to path. Importing it first adds the rest of the modules
 #Simple buffer template
 import os
@@ -33,6 +33,8 @@ class f2_dsp(verilog,thesdk):
                         'DSPmode', 
                         'dsp_decimator_scales',     # Scales for the rx decimator chain
                         'dsp_decimator_cic3shift',  # Left-shift for the decimator cic integrator
+                        'dsp_interpolator_scales',     # Scales for the tx interpolator chain
+                        'dsp_interpolator_cic3shift',  # Left-shift for the interpolator cic integrator
                         'rx_output_mode',
                         'noisetemp', 
                         'Rs', 
@@ -57,8 +59,8 @@ class f2_dsp(verilog,thesdk):
         self.dsp_decimator_model='py'
         self.dsp_decimator_scales=[1,1,1,1]
         self.dsp_decimator_cic3shift=0
-        self.dsp_tx_scales=[8,2,2,512]
-        self.dsp_tx_cic3shift=4
+        self.dsp_interpolator_scales=[8,2,2,512]
+        self.dsp_interpolator_cic3shift=4
         self.noisetemp=290
         self.Rs=160e6
         self.Rs_dsp=20e6
@@ -120,11 +122,11 @@ class f2_dsp(verilog,thesdk):
 
         self._vlogparameters=dict([ ('g_Rs_high',self.Rs), ('g_Rs_low',self.Rs_dsp), 
             ('g_tx_shift'            , 0),
-            ('g_tx_scale0'           , self.dsp_tx_scales[0]),
-            ('g_tx_scale1'           , self.dsp_tx_scales[1]),
-            ('g_tx_scale2'           , self.dsp_tx_scales[2]),
-            ('g_tx_scale3'           , self.dsp_tx_scales[3]),
-            ('g_tx_cic3shift'        , self.dsp_tx_cic3shift),
+            ('g_tx_scale0'           , self.dsp_interpolator_scales[0]),
+            ('g_tx_scale1'           , self.dsp_interpolator_scales[1]),
+            ('g_tx_scale2'           , self.dsp_interpolator_scales[2]),
+            ('g_tx_scale3'           , self.dsp_interpolator_scales[3]),
+            ('g_tx_cic3shift'        , self.dsp_interpolator_cic3shift),
             ('g_tx_user_spread_mode' , 0),
             ('g_tx_user_sum_mode'    , 0),
             ('g_tx_user_select_index', 0),
@@ -149,11 +151,7 @@ class f2_dsp(verilog,thesdk):
 
     def run_tx(self):
         if self.model=='py':
-            if self.tx_dsp.model=='sv':
-                self.tx_dsp.init()
-                self.tx_dsp.run()
-            else:    
-                self.print_log({'type':'F', 'msg': "Python model not available for TX DSP"})
+            self.tx_dsp.run()
         elif self.model=='sv':
             self.write_infile()
             a=verilog_iofile(self,**{'name':'Z'})
