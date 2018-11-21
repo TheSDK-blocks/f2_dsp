@@ -1,5 +1,5 @@
 # f2_dsp class 
-# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 15.11.2018 11:46
+# Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 20.11.2018 20:30
 #Add TheSDK to path. Importing it first adds the rest of the modules
 #Simple buffer template
 import os
@@ -190,7 +190,7 @@ class f2_dsp(verilog,thesdk):
         a.write()
         indata=None #Clear variable to save memory
 
-        for i in range(self.Users):
+        for i in range(self.Rxantennas):
             if i==0:
                 indata=self.iptr_A.Value[i].Value.reshape(-1,1)
             else:
