@@ -55,7 +55,7 @@ class f2_dsp(verilog,thesdk):
         self.Nbits=10  #ADC bits
         self.Txbits=9  #DAC bits
         self.Channeldir='Uplink'
-        self.iptr_A=refptr()
+        self.iptr_A=IO()
         self.dsp_decimator_model='py'
         self.dsp_decimator_scales=[1,1,1,1]
         self.dsp_decimator_cic3shift=0
@@ -74,7 +74,7 @@ class f2_dsp(verilog,thesdk):
             self.copy_propval(parent,self.proplist)
             self.parent =parent;
 
-        self.iptr_A.Value=[refptr() for _ in range(self.Rxantennas)]
+        self.iptr_A.Data=[refptr() for _ in range(self.Rxantennas)]
         self._Z_real_t=[ refptr() for _ in range(self.Txantennas) ]
         self._Z_real_b=[ refptr() for _ in range(self.Txantennas) ]
         self._Z_imag_t=[ refptr() for _ in range(self.Txantennas) ]
@@ -97,7 +97,7 @@ class f2_dsp(verilog,thesdk):
 
         # Rx 
         self.rx_dsp=f2_rx_dsp(self)
-        self.iptr_A=self.rx_dsp.iptr_A        
+        self.rx_dsp.iptr_A=self.iptr_A       
         #This is quick and dirty. Must redefine proper IO structure later on
         # and add the switchbox 
         for i in range(self.nserdes):
@@ -192,9 +192,9 @@ class f2_dsp(verilog,thesdk):
 
         for i in range(self.Rxantennas):
             if i==0:
-                indata=self.iptr_A.Value[i].Value.reshape(-1,1)
+                indata=self.iptr_A.Data[i].Value.reshape(-1,1)
             else:
-                indata=np.r_['1',indata,self.iptr_A.Value[i].Value.reshape(-1,1)]
+                indata=np.r_['1',indata,self.iptr_A.Data[i].Value.reshape(-1,1)]
         #This adds an iofile to self.iiofiles list
         a=verilog_iofile(self,**{'name':'A','data':indata})
         a.simparam='-g g_io_iptr_A='+a.file
