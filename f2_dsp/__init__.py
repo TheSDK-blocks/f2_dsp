@@ -9,6 +9,9 @@ import tempfile
 
 from thesdk import *
 from verilog import *
+from verilog.testbench import *
+from verilog.testbench import testbench as vtb 
+
 from f2_util_classes import * #Iofifosigs are here
 from f2_tx_dsp import *
 from f2_rx_dsp import *
@@ -116,11 +119,8 @@ class f2_dsp(verilog,thesdk):
         self.init()
 
     def init(self):
-        self.def_verilog()
-        self._vlogmodulefiles =list(['clkdiv_n_2_4_8.v', 'AsyncResetReg.v'])
-        #Here's how we sim't for the tapeout
-
-        self._vlogparameters=dict([ ('g_Rs_high',self.Rs), ('g_Rs_low',self.Rs_dsp), 
+        self.vlogmodulefiles =list(['clkdiv_n_2_4_8.v', 'AsyncResetReg.v'])
+        self.vlogparameters=dict([ ('g_Rs_high',self.Rs), ('g_Rs_low',self.Rs_dsp), 
             ('g_tx_shift'            , 0),
             ('g_tx_scale0'           , self.dsp_interpolator_scales[0]),
             ('g_tx_scale1'           , self.dsp_interpolator_scales[1]),
@@ -148,6 +148,8 @@ class f2_dsp(verilog,thesdk):
             ("g_lane_refclk_Ndiv",2), #This should be at least 8x bb
             ("g_lane_refclk_shift","0")
             ])
+
+        self.tb=vtb(self)
 
     def run_tx(self):
         if self.model=='py':
@@ -242,7 +244,18 @@ class f2_dsp(verilog,thesdk):
                     self.queue.put(self._Z_imag_b[i].Value.reshape(-1,1))
 
 if __name__=="__main__":
-    import matplotlib.pyplot as plt
-    from  f2_dsp import *
-    t=thesdk()
-    t.print_log({'type':'I', 'msg': "This is a testing template. Enjoy"})
+    import textwrap
+    from verilog import *
+    from verilog.testbench import *
+    from f2_dsp import *
+    t=f2_dsp()
+    t.tb.dut_instance.ios
+    for signal in t.tb.dut_instance.ios:
+      print('Name is %s, width is %s, and dir is %s, will be connected to to %s' %(signal.name, signal.width,signal.dir, signal.connect))
+    #print(t.tb.dut_instance.definition)
+    #print(t.tb.dut_instance.parameters)
+
+    #print(t.tb.dut_instance.ios[0].connect)
+    #t.tb.dut_instance.ios[0].connect='Gerbil'
+    #print(t.tb.dut_instance.ios[0].connect)
+    print(t.tb.dut_instance.instance)
