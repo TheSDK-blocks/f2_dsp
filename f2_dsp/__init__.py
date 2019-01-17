@@ -1,4 +1,4 @@
-# f2_dsp class 
+#f2_dsp class 
 # Last modification by Marko Kosunen, marko.kosunen@aalto.fi, 20.11.2018 20:30
 #Add TheSDK to path. Importing it first adds the rest of the modules
 #Simple buffer template
@@ -77,11 +77,11 @@ class f2_dsp(verilog,thesdk):
             self.copy_propval(parent,self.proplist)
             self.parent =parent;
 
-        self.iptr_A.Data=[refptr() for _ in range(self.Rxantennas)]
-        self._Z_real_t=[ refptr() for _ in range(self.Txantennas) ]
-        self._Z_real_b=[ refptr() for _ in range(self.Txantennas) ]
-        self._Z_imag_t=[ refptr() for _ in range(self.Txantennas) ]
-        self._Z_imag_b=[ refptr() for _ in range(self.Txantennas) ]
+        self.iptr_A.Data=[IO() for _ in range(self.Rxantennas)]
+        self._Z_real_t=[ IO() for _ in range(self.Txantennas) ]
+        self._Z_real_b=[ IO() for _ in range(self.Txantennas) ]
+        self._Z_imag_t=[ IO() for _ in range(self.Txantennas) ]
+        self._Z_imag_b=[ IO() for _ in range(self.Txantennas) ]
 
         #Rx and tx refer to serdes lane tx is the transmitter input of the serdes
         self._io_lanes_tx=[ iofifosigs(**{'users':self.Users}) for _ in range(self.nserdes)] #this is an output
@@ -120,7 +120,7 @@ class f2_dsp(verilog,thesdk):
 
     def init(self):
         #This gets updated every time you add an iofile
-        self._iofile_bundle=Bundle()
+        self.iofile_bundle=Bundle()
         #Adds filea to bundle
         #Letter variables are just for shorthand notation
         a=verilog_iofile(self,name='Z')
@@ -171,7 +171,7 @@ class f2_dsp(verilog,thesdk):
             self.write_infile()
             self.run_verilog()
             self.read_outfile()
-            del self.iofiles
+            del self.iofile_bundle
 
     def run_rx(self):
         if self.model=='py':
@@ -182,41 +182,41 @@ class f2_dsp(verilog,thesdk):
             #define outfiles
             self.run_verilog()
             self.read_outfile()
-            del self.iofiles
+            del self.iofile_bundle
 
     def write_infile(self):
         for i in range(self.nserdes):
             for k in range(self.Users):
                 if i==0 and k==0:
-                    indata=self._io_lanes_rx[i].data[k].udata.Value.reshape(-1,1)
+                    indata=self._io_lanes_rx[i].data[k].udata.Data.reshape(-1,1)
                 else:
-                    indata=np.r_['1',indata,self._io_lanes_rx[i].data[k].udata.Value.reshape(-1,1)]
+                    indata=np.r_['1',indata,self._io_lanes_rx[i].data[k].udata.Data.reshape(-1,1)]
         #This adds an iofile to self.iiofiles list
-        self._iofile_bundle.Members['io_lanes_rx'].data=indata
-        self._iofile_bundle.Members['io_lanes_rx'].write()
+        self.iofile_bundle.Members['io_lanes_rx'].data=indata
+        self.iofile_bundle.Members['io_lanes_rx'].write()
         indata=None #Clear variable to save memory
 
         for i in range(self.Rxantennas):
             if i==0:
-                indata=self.iptr_A.Data[i].Value.reshape(-1,1)
+                indata=self.iptr_A.Data[i].Data.reshape(-1,1)
             else:
-                indata=np.r_['1',indata,self.iptr_A.Data[i].Value.reshape(-1,1)]
-        #This adds an iofile to self.iofiles list
-        self._iofile_bundle.Members['A'].data=indata
-        self._iofile_bundle.Members['A'].write()
+                indata=np.r_['1',indata,self.iptr_A.Data[i].Data.reshape(-1,1)]
+        #This adds an iofile to self.iofile_bundle list
+        self.iofile_bundle.Members['A'].data=indata
+        self.iofile_bundle.Members['A'].write()
         indata=None #Clear variable to save memory
 
     def read_outfile(self):
         #Handle the ofiles here as you see the best
-        a=self._iofile_bundle.Members['Z']
+        a=self.iofile_bundle.Members['Z']
         a.read(dtype='object')
         for i in range(self.Txantennas):
-            self._Z_real_t[i].Value=a.data[:,i*self.Txantennas+0].astype('str').reshape(-1,1)
-            self._Z_real_b[i].Value=a.data[:,i*self.Txantennas+1].astype('int').reshape(-1,1)
-            self._Z_imag_t[i].Value=a.data[:,i*self.Txantennas+2].astype('str').reshape(-1,1)
-            self._Z_imag_b[i].Value=a.data[:,i*self.Txantennas+3].astype('int').reshape(-1,1)
+            self._Z_real_t[i].Data=a.data[:,i*self.Txantennas+0].astype('str').reshape(-1,1)
+            self._Z_real_b[i].Data=a.data[:,i*self.Txantennas+1].astype('int').reshape(-1,1)
+            self._Z_imag_t[i].Data=a.data[:,i*self.Txantennas+2].astype('str').reshape(-1,1)
+            self._Z_imag_b[i].Data=a.data[:,i*self.Txantennas+3].astype('int').reshape(-1,1)
         a=None
-        a=self._iofile_bundle.Members['io_lanes_tx']
+        a=self.iofile_bundle.Members['io_lanes_tx']
         a.read(dtype='object')
         fromfile=a.data.astype('int')
         for i in range(self.Users):
@@ -229,9 +229,9 @@ class f2_dsp(verilog,thesdk):
                 out[:,i]=(fromfile[:,2*i]+1j*fromfile[:,2*i+1])
             maximum=np.amax([np.abs(np.real(out[:,i])), np.abs(np.imag(out[:,i]))])
             str="Output signal range is %i" %(maximum)
-            self.print_log({'type':'I', 'msg': str})
+            self.print_log(type='I', msg=str)
         for k in range(self.Users):
-            self._io_lanes_tx[0].data[k].udata.Value=out[:,k].reshape((-1,1))
+            self._io_lanes_tx[0].data[k].udata.Data=out[:,k].reshape((-1,1))
         a=None
 
         self.distribute_result()
@@ -239,12 +239,12 @@ class f2_dsp(verilog,thesdk):
     def distribute_result(self):
         for k in range(self.Users):
             if self.par:
-                self.queue.put(self._io_lanes_tx[0].data[k].udata.Value.reshape(-1,1))
+                self.queue.put(self._io_lanes_tx[0].data[k].udata.Data.reshape(-1,1))
                 for i in range(self.Txantennas):
-                    self.queue.put(self._Z_real_t[i].Value.reshape(-1,1)) 
-                    self.queue.put(self._Z_real_b[i].Value.reshape(-1,1))
-                    self.queue.put(self._Z_imag_t[i].Value.reshape(-1,1))
-                    self.queue.put(self._Z_imag_b[i].Value.reshape(-1,1))
+                    self.queue.put(self._Z_real_t[i].Data.reshape(-1,1)) 
+                    self.queue.put(self._Z_real_b[i].Data.reshape(-1,1))
+                    self.queue.put(self._Z_imag_t[i].Data.reshape(-1,1))
+                    self.queue.put(self._Z_imag_b[i].Data.reshape(-1,1))
 
 #clkdiv_n_2_4_8 clkrefdiv( // @[:@3.2]
 #.clock(clock), // @[:@4.4]
@@ -260,7 +260,7 @@ class f2_dsp(verilog,thesdk):
     def define_testbench(self):
         self.tb=vtb(self)
         self.tb.parameters=self.vlogparameters
-        self.tb.iofiles=self._iofile_bundle
+        self.tb.iofiles=self.iofile_bundle
 
         clockdivider=verilog_module(file=self.vlogsrcpath+'/clkdiv_n_2_4_8.v', 
                 instname='clockdivider')
@@ -290,7 +290,7 @@ class f2_dsp(verilog,thesdk):
                 val.connect.init='\'b0'
 
         #IO file connector definitions
-        a=self._iofile_bundle.Members['Z']
+        a=self.iofile_bundle.Members['Z']
         ionames=[]
         for count in range(self.Rxantennas): 
             ionames.append('io_Z_%s_real_t' %(count)) 
@@ -303,7 +303,7 @@ class f2_dsp(verilog,thesdk):
             if re.match(r".*real_t",val.name):
                 val.ioformat="%b"
         
-        a=self._iofile_bundle.Members['io_lanes_tx']
+        a=self.iofile_bundle.Members['io_lanes_tx']
         ionames=[]
         for user in range(self.Users): 
             ionames.append('io_lanes_tx_0_bits_data_%s_udata_real' %(user)) 
@@ -311,13 +311,13 @@ class f2_dsp(verilog,thesdk):
         a.verilog_connectors=self.tb.connectors.list(names=ionames)
 
         ionames=[]
-        a=self._iofile_bundle.Members['A']
+        a=self.iofile_bundle.Members['A']
         for count in range(self.Rxantennas): 
             ionames.append('io_iptr_A_%s_real' %(count)) 
             ionames.append('io_iptr_A_%s_imag' %(count))
         a.verilog_connectors=self.tb.connectors.list(names=ionames)
 
-        a=self._iofile_bundle.Members['io_lanes_rx']
+        a=self.iofile_bundle.Members['io_lanes_rx']
         ionames=[]
         for serdes in range(self.nserdes):
             for user in range(self.Users): 
@@ -351,8 +351,8 @@ always #(c_Ts/2.0) clock = !clock ;
 //Tx_io
 always @(posedge io_ctrl_and_clocks_dac_clocks_0 ) begin 
     //Print only valid values 
-    if ((initdone==1) && txdone==0 && \n"""+self._iofile_bundle.Members['Z'].verilog_io_condition + """
-    ) begin \n"""+ self._iofile_bundle.Members['Z'].verilog_io+"""
+    if ((initdone==1) && txdone==0 && \n"""+self.iofile_bundle.Members['Z'].verilog_io_condition + """
+    ) begin \n"""+ self.iofile_bundle.Members['Z'].verilog_io+"""
      end
 end
 //Rx_io
@@ -360,9 +360,9 @@ always @(posedge lane_clockRef ) begin
 //Mimic the reading to lanes
     //Print only valid values 
     if ((io_lanes_tx_0_valid==1) &&  (initdone==1) && rxdone==0 &&
-    """+self._iofile_bundle.Members['io_lanes_tx'].verilog_io_condition + """
+    """+self.iofile_bundle.Members['io_lanes_tx'].verilog_io_condition + """
 ) begin 
-"""+self._iofile_bundle.Members['io_lanes_tx'].verilog_io + """ 
+"""+self.iofile_bundle.Members['io_lanes_tx'].verilog_io + """ 
     end
 end
                         
@@ -451,13 +451,13 @@ initial #0 begin\n""" + self.tb.connector_inits(level=1) + """
              txdone<=0;
              //Lane output fifo is read by the symrate clock
              @(posedge io_lanes_rx_deq_clock )
-             """+ self._iofile_bundle.Members['io_lanes_rx'].verilog_io+"""
+             """+ self.iofile_bundle.Members['io_lanes_rx'].verilog_io+"""
             txdone<=1;
         end
         while (!$feof(f_io_iptr_A)) begin
             rxdone<=0;
             @(posedge io_ctrl_and_clocks_adc_clocks_0 )
-            """+self._iofile_bundle.Members['A'].verilog_io+"""
+            """+self.iofile_bundle.Members['A'].verilog_io+"""
            rxdone<=1;
         end
                         
