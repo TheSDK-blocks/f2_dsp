@@ -131,6 +131,8 @@ class f2_dsp(verilog,thesdk):
         c.simparam='-g g_io_lanes_rx='+c.file
         d=verilog_iofile(self,name='A',dir='in')
         d.simparam='-g g_io_iptr_A='+d.file
+        e=verilog_iofile(self,name='serdestest_write',dir='in',iotype='ctrl')
+        e.simparam='-g g_serdestest_write='+e.file
 
         self.vlogmodulefiles =list(['clkdiv_n_2_4_8.v', 'AsyncResetReg.v'])
         self.vlogparameters=dict([ ('g_Rs_high',self.Rs), ('g_Rs_low',self.Rs_dsp), 
@@ -281,7 +283,7 @@ class f2_dsp(verilog,thesdk):
                 val.connect.init='\'b0'
 
         #IO file connector definitions
-        a=self._iofile_bundle.Members['Z']
+        a=self.iofile_bundle.Members['Z']
         ionames=[]
         for count in range(self.Rxantennas): 
             ionames.append('io_Z_%s_real_t' %(count)) 
@@ -294,7 +296,7 @@ class f2_dsp(verilog,thesdk):
             if re.match(r".*real_t",val.name):
                 val.ioformat="%b"
         
-        a=self._iofile_bundle.Members['io_lanes_tx']
+        a=self.iofile_bundle.Members['io_lanes_tx']
         ionames=[]
         for user in range(self.Users): 
             ionames.append('io_lanes_tx_0_bits_data_%s_udata_real' %(user)) 
@@ -302,18 +304,29 @@ class f2_dsp(verilog,thesdk):
         a.verilog_connectors=self.tb.connectors.list(names=ionames)
 
         ionames=[]
-        a=self._iofile_bundle.Members['A']
+        a=self.iofile_bundle.Members['A']
         for count in range(self.Rxantennas): 
             ionames.append('io_iptr_A_%s_real' %(count)) 
             ionames.append('io_iptr_A_%s_imag' %(count))
         a.verilog_connectors=self.tb.connectors.list(names=ionames)
 
-        a=self._iofile_bundle.Members['io_lanes_rx']
+        a=self.iofile_bundle.Members['io_lanes_rx']
         ionames=[]
         for serdes in range(self.nserdes):
             for user in range(self.Users): 
                 ionames.append('io_lanes_rx_%s_bits_data_%s_udata_real' %(serdes,user)) 
                 ionames.append('io_lanes_rx_%s_bits_data_%s_udata_imag' %(serdes,user)) 
+        a.verilog_connectors=self.tb.connectors.list(names=ionames)
+
+        a=self.iofile_bundle.Members['serdestest_write']
+        ionames=[]
+        ionames.append('io_ctrl_and_clocks_serdestest_scan_write_mode') 
+        ionames.append('io_ctrl_and_clocks_serdestest_scan_write_address') 
+        ionames.append('io_ctrl_and_clocks_serdestest_scan_write_en') 
+        ionames.append('io_ctrl_and_clocks_serdestest_scan_write_value_rxindex') 
+        for user in range(self.Users): 
+            ionames.append('io_ctrl_and_clocks_serdestest_scan_write_value_data_%s_udata_real' %(user)) 
+            ionames.append('io_ctrl_and_clocks_serdestest_scan_write_value_data_%s_udata_imag' %(user)) 
         a.verilog_connectors=self.tb.connectors.list(names=ionames)
         
         #Here start the testbench contents
@@ -442,22 +455,15 @@ initial #0 begin\n""" + self.tb.connector_inits(level=1) + """
              txdone<=0;
              //Lane output fifo is read by the symrate clock
              @(posedge io_lanes_rx_deq_clock )
-             """+ self._iofile_bundle.Members['io_lanes_rx'].verilog_io+"""
+             """+ self.iofile_bundle.Members['io_lanes_rx'].verilog_io+"""
             txdone<=1;
         end
         while (!$feof(f_io_iptr_A)) begin
             rxdone<=0;
             @(posedge io_ctrl_and_clocks_adc_clocks_0 )
-            """+self._iofile_bundle.Members['A'].verilog_io+"""
+            """+self.iofile_bundle.Members['A'].verilog_io+"""
            rxdone<=1;
-        end
-        while(!$feof(f_ctrl)) begin
-            diff = curr_timestamp-past_timestamp;
-            #diff begin
-                past_timestamp=curr_timestamp;
-                ctrl_value=ctrl_value_buffer;
-                status_ctrl = $fscanf(f_ctrl, "%d%d", curr_timestamp, ctrl_value_buffer);
-        end
+        end"""+self.iofile_bundle.Members['serdestest_write'].verilog_io+"""
     end
     join
     """+self.tb.iofile_close+"""
