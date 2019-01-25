@@ -11,6 +11,7 @@ from thesdk import *
 from verilog import *
 from verilog.testbench import *
 from verilog.testbench import testbench as vtb 
+from verilog.connector import intend
 
 from f2_util_classes import * #Iofifosigs are here
 from f2_tx_dsp import *
