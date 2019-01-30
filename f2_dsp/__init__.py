@@ -78,11 +78,11 @@ class f2_dsp(verilog,thesdk):
             self.copy_propval(parent,self.proplist)
             self.parent =parent;
 
-        self.iptr_A.Data=[refptr() for _ in range(self.Rxantennas)]
-        self._Z_real_t=[ refptr() for _ in range(self.Txantennas) ]
-        self._Z_real_b=[ refptr() for _ in range(self.Txantennas) ]
-        self._Z_imag_t=[ refptr() for _ in range(self.Txantennas) ]
-        self._Z_imag_b=[ refptr() for _ in range(self.Txantennas) ]
+        self.iptr_A.Data=[IO() for _ in range(self.Rxantennas)]
+        self._Z_real_t=[ IO() for _ in range(self.Txantennas) ]
+        self._Z_real_b=[ IO() for _ in range(self.Txantennas) ]
+        self._Z_imag_t=[ IO() for _ in range(self.Txantennas) ]
+        self._Z_imag_b=[ IO() for _ in range(self.Txantennas) ]
 
         #Rx and tx refer to serdes lane tx is the transmitter input of the serdes
         self._io_lanes_tx=[ iofifosigs(**{'users':self.Users}) for _ in range(self.nserdes)] #this is an output
