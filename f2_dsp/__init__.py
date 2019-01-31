@@ -122,18 +122,13 @@ class f2_dsp(verilog,thesdk):
     def init(self):
         #This gets updated every time you add an iofile
         self.iofile_bundle=Bundle()
-        #Adds filea to bundle
-        #Letter variables are just for shorthand notation
-        a=verilog_iofile(self,name='Z')
-        a.simparam='-g g_io_Z='+a.file
-        b=verilog_iofile(self,name='io_lanes_tx')
-        b.simparam='-g g_io_lanes_tx='+b.file
-        c=verilog_iofile(self,name='io_lanes_rx',dir='in')
-        c.simparam='-g g_io_lanes_rx='+c.file
-        d=verilog_iofile(self,name='A',dir='in')
-        d.simparam='-g g_io_iptr_A='+d.file
-        e=verilog_iofile(self,name='serdestest_write',dir='in',iotype='ctrl')
-        e.simparam='-g g_serdestest_write='+e.file
+        #Adds files to bundle
+        _=verilog_iofile(self,name='Z')
+        _=verilog_iofile(self,name='io_lanes_tx')
+        _=verilog_iofile(self,name='io_lanes_rx',dir='in')
+        _=verilog_iofile(self,name='A',dir='in')
+        _=verilog_iofile(self,name='serdestest_write',dir='in',iotype='ctrl')
+        _=verilog_iofile(self,name='reset_sequence',dir='in',iotype='ctrl')
 
         self.vlogmodulefiles =list(['clkdiv_n_2_4_8.v', 'AsyncResetReg.v'])
         self.vlogparameters=dict([ ('g_Rs_high',self.Rs), ('g_Rs_low',self.Rs_dsp),
@@ -201,6 +196,7 @@ class f2_dsp(verilog,thesdk):
         indata=None #Clear variable to save memory
         self.iofile_bundle.Members['serdestest_write'].data=np.array([0, 0]).reshape(-1,2)
         self.iofile_bundle.Members['serdestest_write'].write()
+        self.iofile_bundle.Members['reset_sequence'].write()
 
 
         for i in range(self.Rxantennas):
@@ -253,33 +249,162 @@ class f2_dsp(verilog,thesdk):
                     self.queue.put(self._Z_imag_t[i].Data.reshape(-1,1))
                     self.queue.put(self._Z_imag_b[i].Data.reshape(-1,1))
 
+    def reset_sequence_gen(self):
+        reset_time=int(128/(self.Rs*1e-12))
+        # This modiefies testbench, so testbench msu exist before callint this
+        f=self.iofile_bundle.Members['reset_sequence']
+        f.verilog_connectors=self.tb.connectors.list(names=[
+            'reset',
+            'reset_clock_div',
+            'io_ctrl_and_clocks_tx_reset_clkdiv',
+            'io_ctrl_and_clocks_rx_reset_clkdiv',
+            'lane_refclk_reset',
+            'io_ctrl_and_clocks_reset_dacfifo',
+            'io_ctrl_and_clocks_reset_outfifo',
+            'io_ctrl_and_clocks_reset_infifo',
+            'reset_loop',
+            'io_ctrl_and_clocks_reset_adcfifo',
+        ])
+        #column aliases
+        time=0
+        reset=1
+        reset_clock_div=2
+        io_ctrl_and_clocks_tx_reset_clkdiv=3
+        io_ctrl_and_clocks_rx_reset_clkdiv=4
+        lane_refclk_reset=5
+        io_ctrl_and_clocks_reset_dacfifo=6
+        io_ctrl_and_clocks_reset_outfifo=7
+        io_ctrl_and_clocks_reset_infifo=8
+        reset_loop=9
+        io_ctrl_and_clocks_reset_adcfifo=10;
+
+        #First column is time
+        f.data=np.array([0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]).reshape(1,-1) 
+        f.data=np.r_['0',f.data, f.data[0,:].reshape(1,-1)]
+        f.data[1,time]=reset_time
+        f.data[1,reset_clock_div]=0
+        f.data[1,io_ctrl_and_clocks_tx_reset_clkdiv]=0
+        f.data[1,io_ctrl_and_clocks_rx_reset_clkdiv]=0
+        f.data[1,lane_refclk_reset]=0
+        f.data[1,io_ctrl_and_clocks_reset_dacfifo]=0
+        f.data[1,io_ctrl_and_clocks_reset_outfifo]=0
+        f.data[1,io_ctrl_and_clocks_reset_infifo]=0
+        f.data=np.r_['0',f.data, f.data[1,:].reshape(1,-1)]
+        f.data[2,time]=2*reset_time
+        f.data[2,reset]=0
+        f.data=np.r_['0',f.data, f.data[2,:].reshape(1,-1)]
+        f.data[3,time]=16*reset_time
+        f.data[3,reset_loop]=0
+        f.data[3,io_ctrl_and_clocks_reset_adcfifo]=0
+     
+    def reset_sequence(self):
+        reset_sequence='begin\n'+self.iofile_bundle.Members['reset_sequence'].verilog_io+"""
+memaddrcount=0;
+//Init the LUT
+    while (memaddrcount<2**9) begin
+       //This is really controlled by Scan, but we do not have scan model
+       @(posedge io_clkp8n)
+       io_ctrl_and_clocks_dac_lut_write_en_0<=1;
+       io_ctrl_and_clocks_dac_lut_write_en_1<=1;
+       io_ctrl_and_clocks_dac_lut_write_en_2<=1;
+       io_ctrl_and_clocks_dac_lut_write_en_3<=1;
+       io_ctrl_and_clocks_dac_lut_write_addr_0<=memaddrcount;
+       io_ctrl_and_clocks_dac_lut_write_addr_1<=memaddrcount;
+       io_ctrl_and_clocks_dac_lut_write_addr_2<=memaddrcount;
+       io_ctrl_and_clocks_dac_lut_write_addr_3<=memaddrcount;
+       io_ctrl_and_clocks_adc_lut_write_en<=1;
+       io_ctrl_and_clocks_adc_lut_write_addr<=memaddrcount;
+       if (memaddrcount < 2**8) begin
+          io_ctrl_and_clocks_dac_lut_write_vals_0_real<=memaddrcount+2**8;
+          io_ctrl_and_clocks_dac_lut_write_vals_1_real<=memaddrcount+2**8;
+          io_ctrl_and_clocks_dac_lut_write_vals_2_real<=memaddrcount+2**8;
+          io_ctrl_and_clocks_dac_lut_write_vals_3_real<=memaddrcount+2**8;
+          io_ctrl_and_clocks_dac_lut_write_vals_0_imag<=memaddrcount+2**8;
+          io_ctrl_and_clocks_dac_lut_write_vals_1_imag<=memaddrcount+2**8;
+          io_ctrl_and_clocks_dac_lut_write_vals_2_imag<=memaddrcount+2**8;
+          io_ctrl_and_clocks_dac_lut_write_vals_3_imag<=memaddrcount+2**8;
+       end
+       else begin
+          io_ctrl_and_clocks_dac_lut_write_vals_0_real<=memaddrcount-2**8;
+          io_ctrl_and_clocks_dac_lut_write_vals_1_real<=memaddrcount-2**8;
+          io_ctrl_and_clocks_dac_lut_write_vals_2_real<=memaddrcount-2**8;
+          io_ctrl_and_clocks_dac_lut_write_vals_3_real<=memaddrcount-2**8;
+          io_ctrl_and_clocks_dac_lut_write_vals_0_imag<=memaddrcount-2**8;
+          io_ctrl_and_clocks_dac_lut_write_vals_1_imag<=memaddrcount-2**8;
+          io_ctrl_and_clocks_dac_lut_write_vals_2_imag<=memaddrcount-2**8;
+          io_ctrl_and_clocks_dac_lut_write_vals_3_imag<=memaddrcount-2**8;
+        end
+       //ADC ctrl_and_clocks_LUT
+       io_ctrl_and_clocks_adc_lut_write_en<=1;
+       io_ctrl_and_clocks_adc_lut_write_addr<=memaddrcount;
+       io_ctrl_and_clocks_adc_lut_write_vals_0_real<=memaddrcount;
+       io_ctrl_and_clocks_adc_lut_write_vals_1_real<=memaddrcount;
+       io_ctrl_and_clocks_adc_lut_write_vals_2_real<=memaddrcount;
+       io_ctrl_and_clocks_adc_lut_write_vals_3_real<=memaddrcount;
+       io_ctrl_and_clocks_adc_lut_write_vals_0_imag<=memaddrcount;
+       io_ctrl_and_clocks_adc_lut_write_vals_1_imag<=memaddrcount;
+       io_ctrl_and_clocks_adc_lut_write_vals_2_imag<=memaddrcount;
+       io_ctrl_and_clocks_adc_lut_write_vals_3_imag<=memaddrcount;
+       @(posedge io_clkp8n)
+       memaddrcount=memaddrcount+1;
+       io_ctrl_and_clocks_dac_lut_write_en_0<=0;
+       io_ctrl_and_clocks_dac_lut_write_en_1<=0;
+       io_ctrl_and_clocks_dac_lut_write_en_2<=0;
+       io_ctrl_and_clocks_dac_lut_write_en_3<=0;
+       io_ctrl_and_clocks_adc_lut_write_en<=0;
+    end
+    io_ctrl_and_clocks_adc_lut_reset<=0;
+    initdone<=1; //Flags that we are initiaized
+end"""
+        return reset_sequence
+
     def define_testbench(self):
+        #Initialize testbench
         self.tb=vtb(self)
+
+        #Assign verilog simulation parameters to testbench
         self.tb.parameters=self.vlogparameters
+
+        # Copy iofile simulation parametrs to testbench
         for name, val in self.iofile_bundle.Members.items():
             self.tb.parameters.Members.update(val.vlogparam)
 
+        # Define the iofiles of the testbench. '
+        # Needed for creating file io routines 
         self.tb.iofiles=self.iofile_bundle
+
+        #Define testbench verilog source file
         self.tb.file=self.vlogtbsrc
 
+        # Create clockdivider instance
         clockdivider=verilog_module(file=self.vlogsrcpath+'/clkdiv_n_2_4_8.v',
                 instname='clockdivider')
 
-        #This is a bundle of connectors connected to clockdivider ios
+        # This is a bundle of connectors connected to clockdivider ios
+        # Signals/regs connected to clockdivider are automatically availabe
+        # Some of them need to be renamed (mv)
         clockdivider.io_signals.mv(fro='reset',to='reset_clock_div')
         clockdivider.io_signals.mv(fro='io_Ndiv',to='lane_refclk_Ndiv')
         clockdivider.io_signals.mv(fro='io_shift',to='lane_refclk_shift')
         clockdivider.io_signals.mv(fro='io_reset_clk',to='lane_refclk_reset')
         clockdivider.io_signals.mv(fro='io_clkpn',to='lane_refclk')
 
+        # Add clocdivider and dut io signals to testbench connectors
+        # Dut is creted automaticaly, if verilog file for it exists
         self.tb.connectors.update(bundle=clockdivider.io_signals.Members)
         self.tb.connectors.update(bundle=self.tb.dut_instance.io_signals.Members)
 
-        self.tb.connectors.new(name='reset_loop', cls='reg')
-        #Are these redundant?
-        self.tb.connectors.new(name='asyncResetIn_clockRef', cls='reg')
-        self.tb.connectors.new(name='lane_clkrst_asyncResetIn', cls='reg')
-        #Init the signals connected to the dut input
+        # Some signals needed to control the sim
+        self.tb.connectors.new(name='reset_loop', cls='reg') #Redundant?
+        self.tb.connectors.new(name='asyncResetIn_clockRef', cls='reg') #Redundant?
+        self.tb.connectors.new(name='lane_clkrst_asyncResetIn', cls='reg') #Redundant?
+
+        # All signals are now available, it is possible to initialize 
+        # Reset sequence
+        self.reset_sequence_gen()
+
+        ## Start initializations
+        #Init the signals connected to the dut input to zero
         for name, val in self.tb.dut_instance.ios.Members.items():
             if val.cls=='input':
                 val.connect.init='\'b0'
@@ -289,15 +414,17 @@ class f2_dsp(verilog,thesdk):
             if val.cls=='input':
                 val.connect.init='\'b0'
 
+        # Connect helper diriving signals to their targets and deinit the targets.
         self.tb.connectors.connect(match=r"io_ctrl_and_clocks_.*_controls_.?_reset_loop",connect='reset_loop')
         self.tb.connectors.init(match=r"io_ctrl_and_clocks_.*_controls_.?_reset_loop",init='')
         self.tb.connectors.connect(match=r"io_ctrl_and_clocks_(dac|adc)_clocks_.?",connect='clock')
-        self.tb.connectors.init(match=r"io_ctrl_and_clocks_(dac|adc)_clocks_.?",connect='')
+        self.tb.connectors.init(match=r"io_ctrl_and_clocks_(dac|adc)_clocks_.?",init='')
         self.tb.connectors.connect(match=r"io_lanes_tx_enq_clock",connect='lane_refclk')
         self.tb.connectors.init(match=r"io_lanes_tx_enq_clock",init='')
 
-
-        #Init the selected signals to chosen values
+        # [TODO]: Write a method with mathc for this
+        # Init a selected set signals to chosen values
+        # Some to ones
         oneslist=[
             'asyncResetIn_clockRef',
             'lane_clkrst_asyncResetIn',
@@ -595,7 +722,8 @@ class f2_dsp(verilog,thesdk):
         for name in oneslist:
             self.tb.connectors.Members[name].init='\'b1'
 
-        #Selected signals to parameter values
+        # initialize Selected signals with parameter values
+        # (These are one-to-one mappings. Trickier to generalize)
         paramlist=[
             ('lane_refclk_Ndiv', 'g_lane_refclk_Ndiv'),
             ('lane_refclk_shift', 'g_lane_refclk_shift'),
@@ -677,56 +805,59 @@ class f2_dsp(verilog,thesdk):
         for name in paramlist:
             self.tb.connectors.Members[name[0]].init=name[1]
 
-        #IO file connector definitions
-        a=self.iofile_bundle.Members['Z']
+        # IO file connector definitions
+        # Define what signals and in which order and format are read form the files
+        name='Z'
         ionames=[]
         for count in range(self.Rxantennas):
-            ionames.append('io_Z_%s_real_t' %(count))
-            ionames.append('io_Z_%s_real_b' %(count))
-            ionames.append('io_Z_%s_imag_t' %(count))
-            ionames.append('io_Z_%s_imag_b' %(count))
-        a.verilog_connectors=self.tb.connectors.list(names=ionames)
+            ionames+=[ 'io_Z_%s_real_t' %(count), 'io_Z_%s_real_b' %(count), 
+            'io_Z_%s_imag_t' %(count), 'io_Z_%s_imag_b' %(count)]
+        self.iofile_bundle.Members[name].verilog_connectors=\
+                self.tb.connectors.list(names=ionames)
         #Format for thermobits is %b
-        for val in a.verilog_connectors:
+        for val in self.iofile_bundle.Members[name].verilog_connectors:
             if re.match(r".*(real|imag)_t",val.name):
                 val.ioformat="%b"
 
-        #Verilog cocnnectors handled with files
-        a=self.iofile_bundle.Members['io_lanes_tx']
+        name='io_lanes_tx'
         ionames=[]
         for user in range(self.Users):
-            ionames.append('io_lanes_tx_0_bits_data_%s_udata_real' %(user))
-            ionames.append('io_lanes_tx_0_bits_data_%s_udata_imag' %(user))
-        a.verilog_connectors=self.tb.connectors.list(names=ionames)
+            ionames+=['io_lanes_tx_0_bits_data_%s_udata_real' %(user),
+                      'io_lanes_tx_0_bits_data_%s_udata_imag' %(user)]
+        self.iofile_bundle.Members[name].verilog_connectors=\
+                self.tb.connectors.list(names=ionames)
+        # Change type to signed
         for name in ionames:
             self.tb.connectors.Members[name].type='signed'
 
-
+        name='A'
         ionames=[]
-        a=self.iofile_bundle.Members['A']
         for count in range(self.Rxantennas):
-            ionames.append('io_iptr_A_%s_real' %(count))
-            ionames.append('io_iptr_A_%s_imag' %(count))
-        a.verilog_connectors=self.tb.connectors.list(names=ionames)
-
-        a=self.iofile_bundle.Members['io_lanes_rx']
+            ionames+=['io_iptr_A_%s_real' %(count),
+                     'io_iptr_A_%s_imag' %(count)]
+        self.iofile_bundle.Members[name].verilog_connectors=\
+                self.tb.connectors.list(names=ionames)
+        
+        name='io_lanes_rx'
         ionames=[]
         for serdes in range(self.nserdes):
             for user in range(self.Users):
-                ionames.append('io_lanes_rx_%s_bits_data_%s_udata_real' %(serdes,user))
-                ionames.append('io_lanes_rx_%s_bits_data_%s_udata_imag' %(serdes,user))
-        a.verilog_connectors=self.tb.connectors.list(names=ionames)
+                ionames+=['io_lanes_rx_%s_bits_data_%s_udata_real' %(serdes,user),
+                          'io_lanes_rx_%s_bits_data_%s_udata_imag' %(serdes,user)]
+        self.iofile_bundle.Members[name].verilog_connectors=\
+                self.tb.connectors.list(names=ionames)
 
-        a=self.iofile_bundle.Members['serdestest_write']
+        name='serdestest_write'
         ionames=[]
-        ionames.append('io_ctrl_and_clocks_serdestest_scan_write_mode')
-        ionames.append('io_ctrl_and_clocks_serdestest_scan_write_address')
+        ionames+=['io_ctrl_and_clocks_serdestest_scan_write_mode',
+                  'io_ctrl_and_clocks_serdestest_scan_write_address']
         #ionames.append('io_ctrl_and_clocks_serdestest_scan_write_en')
         #ionames.append('io_ctrl_and_clocks_serdestest_scan_write_value_rxindex')
         #for user in range(self.Users):
         #    ionames.append('io_ctrl_and_clocks_serdestest_scan_write_value_data_%s_udata_real' %(user))
         #    ionames.append('io_ctrl_and_clocks_serdestest_scan_write_value_data_%s_udata_imag' %(user))
-        a.verilog_connectors=self.tb.connectors.list(names=ionames)
+        self.iofile_bundle.Members[name].verilog_connectors=\
+                self.tb.connectors.list(names=ionames)
 
         #Here start the testbench contents
         self.tb.contents="""
@@ -741,129 +872,69 @@ parameter RESET_TIME = 128*c_Ts; // initially 16
                     r"io_lanes_tx_enq_clock"])+self.tb.iofile_definitions+"""
 
 
-integer memaddrcount;
-integer initdone, rxdone, txdone;
+//Helper vars for simulation control
+integer memaddrcount, initdone, rxdone, txdone;
+initial memaddrcount=0;
+initial initdone=0;
+initial rxdone=0;
+initial txdone=0;
 
-//Initializations
-//initial clock = 1'b0;
-//initial reset = 1'b0;
 
-//Clock definitions
-always #(c_Ts/2.0) clock = !clock ;
+//Clock divider model\n""" + clockdivider.instance + """//DUT definition
+"""+self.tb.dut_instance.instance+"""
 
+//Master clock is omnipresent
+always #(c_Ts/2.0) clock = !clock;
+
+//Execution with parallel fork-join and sequential begin-end sections
+initial #0 begin
+fork
+""" + self.tb.connectors.verilog_inits(level=1)+""" 
 //Tx_io
-always @(posedge io_ctrl_and_clocks_dac_clocks_0 ) begin
+@(posedge initdone) begin
+while (!txdone) begin
+@(posedge io_ctrl_and_clocks_dac_clocks_0 ) begin
     //Print only valid values
-    if ((initdone==1) && txdone==0 && \n"""+self.iofile_bundle.Members['Z'].verilog_io_condition + """
+    if ("""+self.iofile_bundle.Members['Z'].verilog_io_condition + """
     ) begin \n"""+ self.iofile_bundle.Members['Z'].verilog_io+"""
      end
 end
+end
+end
+
 //Rx_io
-always @(posedge lane_refclk ) begin
+@(posedge initdone) begin
+while (!rxdone) begin
+@(posedge lane_refclk ) begin
 //Mimic the reading to lanes
     //Print only valid values
-    if ((io_lanes_tx_0_valid==1) &&  (initdone==1) && rxdone==0 &&
+    if ((io_lanes_tx_0_valid==1)  &&
     """+self.iofile_bundle.Members['io_lanes_tx'].verilog_io_condition + """
 ) begin
 """+self.iofile_bundle.Members['io_lanes_tx'].verilog_io + """
     end
 end
+end
+end
 
-//Clock divider model\n""" + clockdivider.instance + """//DUT definition
-"""+self.tb.dut_instance.instance+"""
-//Initial values
-initial #0 begin\n""" + self.tb.connectors.verilog_inits(level=1) + """
-
-    //This should be transferred to control file
-    #(RESET_TIME)
-    initdone=0;
-    txdone=0;
-    rxdone=0;
-    reset_clock_div=0;
-    io_ctrl_and_clocks_tx_reset_clkdiv=0;
-    io_ctrl_and_clocks_rx_reset_clkdiv=0;
-    lane_refclk_reset=0;
-    io_ctrl_and_clocks_reset_dacfifo=0;
-    io_ctrl_and_clocks_reset_outfifo=0;
-    io_ctrl_and_clocks_reset_infifo=0;
-    #(2*RESET_TIME)
-    reset=0;
-    #(16*RESET_TIME)
-    reset_loop=0;
-    io_ctrl_and_clocks_reset_adcfifo=0;
-    memaddrcount=0;
-//Init the LUT
-    while (memaddrcount<2**9) begin
-       //This is really controlled by Scan, but we do not have scan model
-       @(posedge io_clkp8n)
-       io_ctrl_and_clocks_dac_lut_write_en_0<=1;
-       io_ctrl_and_clocks_dac_lut_write_en_1<=1;
-       io_ctrl_and_clocks_dac_lut_write_en_2<=1;
-       io_ctrl_and_clocks_dac_lut_write_en_3<=1;
-       io_ctrl_and_clocks_dac_lut_write_addr_0<=memaddrcount;
-       io_ctrl_and_clocks_dac_lut_write_addr_1<=memaddrcount;
-       io_ctrl_and_clocks_dac_lut_write_addr_2<=memaddrcount;
-       io_ctrl_and_clocks_dac_lut_write_addr_3<=memaddrcount;
-       io_ctrl_and_clocks_adc_lut_write_en<=1;
-       io_ctrl_and_clocks_adc_lut_write_addr<=memaddrcount;
-       if (memaddrcount < 2**8) begin
-          io_ctrl_and_clocks_dac_lut_write_vals_0_real<=memaddrcount+2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_1_real<=memaddrcount+2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_2_real<=memaddrcount+2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_3_real<=memaddrcount+2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_0_imag<=memaddrcount+2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_1_imag<=memaddrcount+2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_2_imag<=memaddrcount+2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_3_imag<=memaddrcount+2**8;
-       end
-
-       else begin
-          io_ctrl_and_clocks_dac_lut_write_vals_0_real<=memaddrcount-2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_1_real<=memaddrcount-2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_2_real<=memaddrcount-2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_3_real<=memaddrcount-2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_0_imag<=memaddrcount-2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_1_imag<=memaddrcount-2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_2_imag<=memaddrcount-2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_3_imag<=memaddrcount-2**8;
-        end
-       //ADC ctrl_and_clocks_LUT
-       io_ctrl_and_clocks_adc_lut_write_en<=1;
-       io_ctrl_and_clocks_adc_lut_write_addr<=memaddrcount;
-       io_ctrl_and_clocks_adc_lut_write_vals_0_real<=memaddrcount;
-       io_ctrl_and_clocks_adc_lut_write_vals_1_real<=memaddrcount;
-       io_ctrl_and_clocks_adc_lut_write_vals_2_real<=memaddrcount;
-       io_ctrl_and_clocks_adc_lut_write_vals_3_real<=memaddrcount;
-       io_ctrl_and_clocks_adc_lut_write_vals_0_imag<=memaddrcount;
-       io_ctrl_and_clocks_adc_lut_write_vals_1_imag<=memaddrcount;
-       io_ctrl_and_clocks_adc_lut_write_vals_2_imag<=memaddrcount;
-       io_ctrl_and_clocks_adc_lut_write_vals_3_imag<=memaddrcount;
-       @(posedge io_clkp8n)
-       memaddrcount=memaddrcount+1;
-       io_ctrl_and_clocks_dac_lut_write_en_0<=0;
-       io_ctrl_and_clocks_dac_lut_write_en_1<=0;
-       io_ctrl_and_clocks_dac_lut_write_en_2<=0;
-       io_ctrl_and_clocks_dac_lut_write_en_3<=0;
-       io_ctrl_and_clocks_adc_lut_write_en<=0;
-    end
-    io_ctrl_and_clocks_adc_lut_reset<=0;
-    initdone<=1;
-    fork
-     //status_io_lanes_rx=$fgets(dummyline,f_io_lanes_rx);
-     while (!$feof(f_io_lanes_rx)) begin
-             txdone<=0;
-             //Lane output fifo is read by the symrate clock
-             @(posedge io_lanes_rx_deq_clock )
-             """+ self.iofile_bundle.Members['io_lanes_rx'].verilog_io+"""
+"""+ self.reset_sequence()+"""
+        // Sequence triggered by initdone
+        @(posedge initdone) begin
+            while (!$feof(f_io_lanes_rx)) begin
+                 //Lane output fifo is read by the symrate clock
+                 @(posedge io_lanes_rx_deq_clock )
+                 """+ self.iofile_bundle.Members['io_lanes_rx'].verilog_io+"""
+            end
             txdone<=1;
         end
-        while (!$feof(f_A)) begin
-            rxdone<=0;
-            @(posedge io_ctrl_and_clocks_adc_clocks_0 )
-            """+self.iofile_bundle.Members['A'].verilog_io+"""
-           rxdone<=1;
-        end"""+self.iofile_bundle.Members['serdestest_write'].verilog_io+"""
-    end
+        // Sequence triggered by initdone
+        @(posedge initdone) begin
+            while (!$feof(f_A)) begin
+                @(posedge io_ctrl_and_clocks_adc_clocks_0 )
+                """+self.iofile_bundle.Members['A'].verilog_io+"""
+            end\n"""+self.iofile_bundle.Members['serdestest_write'].verilog_io +"""
+            rxdone<=1;
+        end
     join
     """+self.tb.iofile_close+"""
     $finish;
