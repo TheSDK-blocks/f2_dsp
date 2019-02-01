@@ -251,9 +251,11 @@ class f2_dsp(verilog,thesdk):
 
     def reset_sequence_gen(self):
         reset_time=int(128/(self.Rs*1e-12))
-        # This modiefies testbench, so testbench msu exist before callint this
+        # This modiefies testbench, so testbench must exist before callint this
         f=self.iofile_bundle.Members['reset_sequence']
-        f.verilog_connectors=self.tb.connectors.list(names=[
+        
+        #Define the connectors associeted with this file
+        conns=[
             'reset',
             'reset_clock_div',
             'io_ctrl_and_clocks_tx_reset_clkdiv',
@@ -263,40 +265,47 @@ class f2_dsp(verilog,thesdk):
             'io_ctrl_and_clocks_reset_outfifo',
             'io_ctrl_and_clocks_reset_infifo',
             'reset_loop',
-            'io_ctrl_and_clocks_reset_adcfifo',
-        ])
-        #column aliases
-        time=0
-        reset=1
-        reset_clock_div=2
-        io_ctrl_and_clocks_tx_reset_clkdiv=3
-        io_ctrl_and_clocks_rx_reset_clkdiv=4
-        lane_refclk_reset=5
-        io_ctrl_and_clocks_reset_dacfifo=6
-        io_ctrl_and_clocks_reset_outfifo=7
-        io_ctrl_and_clocks_reset_infifo=8
-        reset_loop=9
-        io_ctrl_and_clocks_reset_adcfifo=10;
+            'io_ctrl_and_clocks_reset_adcfifo'
+        ]
+        ## Start initializations
+        #Init the signals connected to the dut input to zero
+        for name in conns: 
+            self.tb.connectors.Members[name].init=''
+        f.verilog_connectors=self.tb.connectors.list(names=conns)
 
-        #First column is time
-        f.data=np.array([0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]).reshape(1,-1) 
-        f.data=np.r_['0',f.data, f.data[0,:].reshape(1,-1)]
-        f.data[1,time]=reset_time
-        f.data[1,reset_clock_div]=0
-        f.data[1,io_ctrl_and_clocks_tx_reset_clkdiv]=0
-        f.data[1,io_ctrl_and_clocks_rx_reset_clkdiv]=0
-        f.data[1,lane_refclk_reset]=0
-        f.data[1,io_ctrl_and_clocks_reset_dacfifo]=0
-        f.data[1,io_ctrl_and_clocks_reset_outfifo]=0
-        f.data[1,io_ctrl_and_clocks_reset_infifo]=0
-        f.data=np.r_['0',f.data, f.data[1,:].reshape(1,-1)]
-        f.data[2,time]=2*reset_time
-        f.data[2,reset]=0
-        f.data=np.r_['0',f.data, f.data[2,:].reshape(1,-1)]
-        f.data[3,time]=16*reset_time
-        f.data[3,reset_loop]=0
-        f.data[3,io_ctrl_and_clocks_reset_adcfifo]=0
+        # Define the control sequence time and data values
+        # [TODO]: de-init could be added to this method
+        f.set_control_data(init=1) # Initialize to ones at time 0
+
+        # After awhile, switch off reset of some blocks 
+        time=reset_time
+        for name in [ 
+                      'reset_clock_div', 
+                      'io_ctrl_and_clocks_tx_reset_clkdiv',
+                      'io_ctrl_and_clocks_rx_reset_clkdiv',
+                      'lane_refclk_reset',
+                      'io_ctrl_and_clocks_reset_dacfifo',
+                      'io_ctrl_and_clocks_reset_outfifo',                      
+                      'io_ctrl_and_clocks_reset_infifo'
+                      ]:
+            f.set_control_data(time=time,name=name,val=0)
+
+        # Switch off the master reset
+        time=2*reset_time
+        for name in [ 
+                      'reset', 
+                      ]:
+            f.set_control_data(time=time,name=name,val=0)
+
+        # Switch off the last ones
+        time=16*reset_time
+        for name in [ 
+                      'reset_loop', 
+                      'io_ctrl_and_clocks_reset_adcfifo' 
+                      ]:
+            f.set_control_data(time=time,name=name,val=0)
      
+    # Define method that generates reset sewunce verilog
     def reset_sequence(self):
         reset_sequence='begin\n'+self.iofile_bundle.Members['reset_sequence'].verilog_io+"""
 memaddrcount=0;
@@ -358,6 +367,7 @@ memaddrcount=0;
 end"""
         return reset_sequence
 
+    # Testbench definition method
     def define_testbench(self):
         #Initialize testbench
         self.tb=vtb(self)
@@ -399,9 +409,6 @@ end"""
         self.tb.connectors.new(name='asyncResetIn_clockRef', cls='reg') #Redundant?
         self.tb.connectors.new(name='lane_clkrst_asyncResetIn', cls='reg') #Redundant?
 
-        # All signals are now available, it is possible to initialize 
-        # Reset sequence
-        self.reset_sequence_gen()
 
         ## Start initializations
         #Init the signals connected to the dut input to zero
@@ -422,391 +429,99 @@ end"""
         self.tb.connectors.connect(match=r"io_lanes_tx_enq_clock",connect='lane_refclk')
         self.tb.connectors.init(match=r"io_lanes_tx_enq_clock",init='')
 
-        # [TODO]: Write a method with mathc for this
         # Init a selected set signals to chosen values
         # Some to ones
         oneslist=[
             'asyncResetIn_clockRef',
             'lane_clkrst_asyncResetIn',
-            'lane_refclk_reset',
-            'io_ctrl_and_clocks_tx_reset_clkdiv',
-            'io_ctrl_and_clocks_rx_reset_clkdiv',
-            'reset_loop',
-            'reset_clock_div',
-            'reset',
-            'io_ctrl_and_clocks_reset_dacfifo',
-            'io_lanes_tx_0_ready',
-            'io_lanes_tx_1_ready',
-            'io_lanes_rx_0_valid',
-            'io_lanes_rx_1_valid',
-            'io_ctrl_and_clocks_tx_user_weights_0_0_real',
-            'io_ctrl_and_clocks_tx_user_weights_0_0_imag',
-            'io_ctrl_and_clocks_tx_user_weights_0_1_real',
-            'io_ctrl_and_clocks_tx_user_weights_0_1_imag',
-            'io_ctrl_and_clocks_tx_user_weights_0_2_real',
-            'io_ctrl_and_clocks_tx_user_weights_0_2_imag',
-            'io_ctrl_and_clocks_tx_user_weights_0_3_real',
-            'io_ctrl_and_clocks_tx_user_weights_0_3_imag',
-            'io_ctrl_and_clocks_tx_user_weights_0_4_real',
-            'io_ctrl_and_clocks_tx_user_weights_0_4_imag',
-            'io_ctrl_and_clocks_tx_user_weights_0_5_real',
-            'io_ctrl_and_clocks_tx_user_weights_0_5_imag',
-            'io_ctrl_and_clocks_tx_user_weights_0_6_real',
-            'io_ctrl_and_clocks_tx_user_weights_0_6_imag',
-            'io_ctrl_and_clocks_tx_user_weights_0_7_real',
-            'io_ctrl_and_clocks_tx_user_weights_0_7_imag',
-            'io_ctrl_and_clocks_tx_user_weights_0_8_real',
-            'io_ctrl_and_clocks_tx_user_weights_0_8_imag',
-            'io_ctrl_and_clocks_tx_user_weights_0_9_real',
-            'io_ctrl_and_clocks_tx_user_weights_0_9_imag',
-            'io_ctrl_and_clocks_tx_user_weights_0_10_real',
-            'io_ctrl_and_clocks_tx_user_weights_0_10_imag',
-            'io_ctrl_and_clocks_tx_user_weights_0_11_real',
-            'io_ctrl_and_clocks_tx_user_weights_0_11_imag',
-            'io_ctrl_and_clocks_tx_user_weights_0_12_real',
-            'io_ctrl_and_clocks_tx_user_weights_0_12_imag',
-            'io_ctrl_and_clocks_tx_user_weights_0_13_real',
-            'io_ctrl_and_clocks_tx_user_weights_0_13_imag',
-            'io_ctrl_and_clocks_tx_user_weights_0_14_real',
-            'io_ctrl_and_clocks_tx_user_weights_0_14_imag',
-            'io_ctrl_and_clocks_tx_user_weights_0_15_real',
-            'io_ctrl_and_clocks_tx_user_weights_0_15_imag',
-            'io_ctrl_and_clocks_tx_user_weights_1_0_real',
-            'io_ctrl_and_clocks_tx_user_weights_1_0_imag',
-            'io_ctrl_and_clocks_tx_user_weights_1_1_real',
-            'io_ctrl_and_clocks_tx_user_weights_1_1_imag',
-            'io_ctrl_and_clocks_tx_user_weights_1_2_real',
-            'io_ctrl_and_clocks_tx_user_weights_1_2_imag',
-            'io_ctrl_and_clocks_tx_user_weights_1_3_real',
-            'io_ctrl_and_clocks_tx_user_weights_1_3_imag',
-            'io_ctrl_and_clocks_tx_user_weights_1_4_real',
-            'io_ctrl_and_clocks_tx_user_weights_1_4_imag',
-            'io_ctrl_and_clocks_tx_user_weights_1_5_real',
-            'io_ctrl_and_clocks_tx_user_weights_1_5_imag',
-            'io_ctrl_and_clocks_tx_user_weights_1_6_real',
-            'io_ctrl_and_clocks_tx_user_weights_1_6_imag',
-            'io_ctrl_and_clocks_tx_user_weights_1_7_real',
-            'io_ctrl_and_clocks_tx_user_weights_1_7_imag',
-            'io_ctrl_and_clocks_tx_user_weights_1_8_real',
-            'io_ctrl_and_clocks_tx_user_weights_1_8_imag',
-            'io_ctrl_and_clocks_tx_user_weights_1_9_real',
-            'io_ctrl_and_clocks_tx_user_weights_1_9_imag',
-            'io_ctrl_and_clocks_tx_user_weights_1_10_real',
-            'io_ctrl_and_clocks_tx_user_weights_1_10_imag',
-            'io_ctrl_and_clocks_tx_user_weights_1_11_real',
-            'io_ctrl_and_clocks_tx_user_weights_1_11_imag',
-            'io_ctrl_and_clocks_tx_user_weights_1_12_real',
-            'io_ctrl_and_clocks_tx_user_weights_1_12_imag',
-            'io_ctrl_and_clocks_tx_user_weights_1_13_real',
-            'io_ctrl_and_clocks_tx_user_weights_1_13_imag',
-            'io_ctrl_and_clocks_tx_user_weights_1_14_real',
-            'io_ctrl_and_clocks_tx_user_weights_1_14_imag',
-            'io_ctrl_and_clocks_tx_user_weights_1_15_real',
-            'io_ctrl_and_clocks_tx_user_weights_1_15_imag',
-            'io_ctrl_and_clocks_tx_user_weights_2_0_real',
-            'io_ctrl_and_clocks_tx_user_weights_2_0_imag',
-            'io_ctrl_and_clocks_tx_user_weights_2_1_real',
-            'io_ctrl_and_clocks_tx_user_weights_2_1_imag',
-            'io_ctrl_and_clocks_tx_user_weights_2_2_real',
-            'io_ctrl_and_clocks_tx_user_weights_2_2_imag',
-            'io_ctrl_and_clocks_tx_user_weights_2_3_real',
-            'io_ctrl_and_clocks_tx_user_weights_2_3_imag',
-            'io_ctrl_and_clocks_tx_user_weights_2_4_real',
-            'io_ctrl_and_clocks_tx_user_weights_2_4_imag',
-            'io_ctrl_and_clocks_tx_user_weights_2_5_real',
-            'io_ctrl_and_clocks_tx_user_weights_2_5_imag',
-            'io_ctrl_and_clocks_tx_user_weights_2_6_real',
-            'io_ctrl_and_clocks_tx_user_weights_2_6_imag',
-            'io_ctrl_and_clocks_tx_user_weights_2_7_real',
-            'io_ctrl_and_clocks_tx_user_weights_2_7_imag',
-            'io_ctrl_and_clocks_tx_user_weights_2_8_real',
-            'io_ctrl_and_clocks_tx_user_weights_2_8_imag',
-            'io_ctrl_and_clocks_tx_user_weights_2_9_real',
-            'io_ctrl_and_clocks_tx_user_weights_2_9_imag',
-            'io_ctrl_and_clocks_tx_user_weights_2_10_real',
-            'io_ctrl_and_clocks_tx_user_weights_2_10_imag',
-            'io_ctrl_and_clocks_tx_user_weights_2_11_real',
-            'io_ctrl_and_clocks_tx_user_weights_2_11_imag',
-            'io_ctrl_and_clocks_tx_user_weights_2_12_real',
-            'io_ctrl_and_clocks_tx_user_weights_2_12_imag',
-            'io_ctrl_and_clocks_tx_user_weights_2_13_real',
-            'io_ctrl_and_clocks_tx_user_weights_2_13_imag',
-            'io_ctrl_and_clocks_tx_user_weights_2_14_real',
-            'io_ctrl_and_clocks_tx_user_weights_2_14_imag',
-            'io_ctrl_and_clocks_tx_user_weights_2_15_real',
-            'io_ctrl_and_clocks_tx_user_weights_2_15_imag',
-            'io_ctrl_and_clocks_tx_user_weights_3_0_real',
-            'io_ctrl_and_clocks_tx_user_weights_3_0_imag',
-            'io_ctrl_and_clocks_tx_user_weights_3_1_real',
-            'io_ctrl_and_clocks_tx_user_weights_3_1_imag',
-            'io_ctrl_and_clocks_tx_user_weights_3_2_real',
-            'io_ctrl_and_clocks_tx_user_weights_3_2_imag',
-            'io_ctrl_and_clocks_tx_user_weights_3_3_real',
-            'io_ctrl_and_clocks_tx_user_weights_3_3_imag',
-            'io_ctrl_and_clocks_tx_user_weights_3_4_real',
-            'io_ctrl_and_clocks_tx_user_weights_3_4_imag',
-            'io_ctrl_and_clocks_tx_user_weights_3_5_real',
-            'io_ctrl_and_clocks_tx_user_weights_3_5_imag',
-            'io_ctrl_and_clocks_tx_user_weights_3_6_real',
-            'io_ctrl_and_clocks_tx_user_weights_3_6_imag',
-            'io_ctrl_and_clocks_tx_user_weights_3_7_real',
-            'io_ctrl_and_clocks_tx_user_weights_3_7_imag',
-            'io_ctrl_and_clocks_tx_user_weights_3_8_real',
-            'io_ctrl_and_clocks_tx_user_weights_3_8_imag',
-            'io_ctrl_and_clocks_tx_user_weights_3_9_real',
-            'io_ctrl_and_clocks_tx_user_weights_3_9_imag',
-            'io_ctrl_and_clocks_tx_user_weights_3_10_real',
-            'io_ctrl_and_clocks_tx_user_weights_3_10_imag',
-            'io_ctrl_and_clocks_tx_user_weights_3_11_real',
-            'io_ctrl_and_clocks_tx_user_weights_3_11_imag',
-            'io_ctrl_and_clocks_tx_user_weights_3_12_real',
-            'io_ctrl_and_clocks_tx_user_weights_3_12_imag',
-            'io_ctrl_and_clocks_tx_user_weights_3_13_real',
-            'io_ctrl_and_clocks_tx_user_weights_3_13_imag',
-            'io_ctrl_and_clocks_tx_user_weights_3_14_real',
-            'io_ctrl_and_clocks_tx_user_weights_3_14_imag',
-            'io_ctrl_and_clocks_tx_user_weights_3_15_real',
-            'io_ctrl_and_clocks_tx_user_weights_3_15_imag',
             'io_ctrl_and_clocks_reset_index_count',
-            'io_ctrl_and_clocks_reset_outfifo',
-            'io_ctrl_and_clocks_reset_adcfifo',
-            'io_ctrl_and_clocks_reset_infifo',
             'io_ctrl_and_clocks_adc_lut_reset',
-            'io_ctrl_and_clocks_rx_user_weights_0_0_real',
-            'io_ctrl_and_clocks_rx_user_weights_0_0_imag',
-            'io_ctrl_and_clocks_rx_user_weights_0_1_real',
-            'io_ctrl_and_clocks_rx_user_weights_0_1_imag',
-            'io_ctrl_and_clocks_rx_user_weights_0_2_real',
-            'io_ctrl_and_clocks_rx_user_weights_0_2_imag',
-            'io_ctrl_and_clocks_rx_user_weights_0_3_real',
-            'io_ctrl_and_clocks_rx_user_weights_0_3_imag',
-            'io_ctrl_and_clocks_rx_user_weights_0_4_real',
-            'io_ctrl_and_clocks_rx_user_weights_0_4_imag',
-            'io_ctrl_and_clocks_rx_user_weights_0_5_real',
-            'io_ctrl_and_clocks_rx_user_weights_0_5_imag',
-            'io_ctrl_and_clocks_rx_user_weights_0_6_real',
-            'io_ctrl_and_clocks_rx_user_weights_0_6_imag',
-            'io_ctrl_and_clocks_rx_user_weights_0_7_real',
-            'io_ctrl_and_clocks_rx_user_weights_0_7_imag',
-            'io_ctrl_and_clocks_rx_user_weights_0_8_real',
-            'io_ctrl_and_clocks_rx_user_weights_0_8_imag',
-            'io_ctrl_and_clocks_rx_user_weights_0_9_real',
-            'io_ctrl_and_clocks_rx_user_weights_0_9_imag',
-            'io_ctrl_and_clocks_rx_user_weights_0_10_real',
-            'io_ctrl_and_clocks_rx_user_weights_0_10_imag',
-            'io_ctrl_and_clocks_rx_user_weights_0_11_real',
-            'io_ctrl_and_clocks_rx_user_weights_0_11_imag',
-            'io_ctrl_and_clocks_rx_user_weights_0_12_real',
-            'io_ctrl_and_clocks_rx_user_weights_0_12_imag',
-            'io_ctrl_and_clocks_rx_user_weights_0_13_real',
-            'io_ctrl_and_clocks_rx_user_weights_0_13_imag',
-            'io_ctrl_and_clocks_rx_user_weights_0_14_real',
-            'io_ctrl_and_clocks_rx_user_weights_0_14_imag',
-            'io_ctrl_and_clocks_rx_user_weights_0_15_real',
-            'io_ctrl_and_clocks_rx_user_weights_0_15_imag',
-            'io_ctrl_and_clocks_rx_user_weights_1_0_real',
-            'io_ctrl_and_clocks_rx_user_weights_1_0_imag',
-            'io_ctrl_and_clocks_rx_user_weights_1_1_real',
-            'io_ctrl_and_clocks_rx_user_weights_1_1_imag',
-            'io_ctrl_and_clocks_rx_user_weights_1_2_real',
-            'io_ctrl_and_clocks_rx_user_weights_1_2_imag',
-            'io_ctrl_and_clocks_rx_user_weights_1_3_real',
-            'io_ctrl_and_clocks_rx_user_weights_1_3_imag',
-            'io_ctrl_and_clocks_rx_user_weights_1_4_real',
-            'io_ctrl_and_clocks_rx_user_weights_1_4_imag',
-            'io_ctrl_and_clocks_rx_user_weights_1_5_real',
-            'io_ctrl_and_clocks_rx_user_weights_1_5_imag',
-            'io_ctrl_and_clocks_rx_user_weights_1_6_real',
-            'io_ctrl_and_clocks_rx_user_weights_1_6_imag',
-            'io_ctrl_and_clocks_rx_user_weights_1_7_real',
-            'io_ctrl_and_clocks_rx_user_weights_1_7_imag',
-            'io_ctrl_and_clocks_rx_user_weights_1_8_real',
-            'io_ctrl_and_clocks_rx_user_weights_1_8_imag',
-            'io_ctrl_and_clocks_rx_user_weights_1_9_real',
-            'io_ctrl_and_clocks_rx_user_weights_1_9_imag',
-            'io_ctrl_and_clocks_rx_user_weights_1_10_real',
-            'io_ctrl_and_clocks_rx_user_weights_1_10_imag',
-            'io_ctrl_and_clocks_rx_user_weights_1_11_real',
-            'io_ctrl_and_clocks_rx_user_weights_1_11_imag',
-            'io_ctrl_and_clocks_rx_user_weights_1_12_real',
-            'io_ctrl_and_clocks_rx_user_weights_1_12_imag',
-            'io_ctrl_and_clocks_rx_user_weights_1_13_real',
-            'io_ctrl_and_clocks_rx_user_weights_1_13_imag',
-            'io_ctrl_and_clocks_rx_user_weights_1_14_real',
-            'io_ctrl_and_clocks_rx_user_weights_1_14_imag',
-            'io_ctrl_and_clocks_rx_user_weights_1_15_real',
-            'io_ctrl_and_clocks_rx_user_weights_1_15_imag',
-            'io_ctrl_and_clocks_rx_user_weights_2_0_real',
-            'io_ctrl_and_clocks_rx_user_weights_2_0_imag',
-            'io_ctrl_and_clocks_rx_user_weights_2_1_real',
-            'io_ctrl_and_clocks_rx_user_weights_2_1_imag',
-            'io_ctrl_and_clocks_rx_user_weights_2_2_real',
-            'io_ctrl_and_clocks_rx_user_weights_2_2_imag',
-            'io_ctrl_and_clocks_rx_user_weights_2_3_real',
-            'io_ctrl_and_clocks_rx_user_weights_2_3_imag',
-            'io_ctrl_and_clocks_rx_user_weights_2_4_real',
-            'io_ctrl_and_clocks_rx_user_weights_2_4_imag',
-            'io_ctrl_and_clocks_rx_user_weights_2_5_real',
-            'io_ctrl_and_clocks_rx_user_weights_2_5_imag',
-            'io_ctrl_and_clocks_rx_user_weights_2_6_real',
-            'io_ctrl_and_clocks_rx_user_weights_2_6_imag',
-            'io_ctrl_and_clocks_rx_user_weights_2_7_real',
-            'io_ctrl_and_clocks_rx_user_weights_2_7_imag',
-            'io_ctrl_and_clocks_rx_user_weights_2_8_real',
-            'io_ctrl_and_clocks_rx_user_weights_2_8_imag',
-            'io_ctrl_and_clocks_rx_user_weights_2_9_real',
-            'io_ctrl_and_clocks_rx_user_weights_2_9_imag',
-            'io_ctrl_and_clocks_rx_user_weights_2_10_real',
-            'io_ctrl_and_clocks_rx_user_weights_2_10_imag',
-            'io_ctrl_and_clocks_rx_user_weights_2_11_real',
-            'io_ctrl_and_clocks_rx_user_weights_2_11_imag',
-            'io_ctrl_and_clocks_rx_user_weights_2_12_real',
-            'io_ctrl_and_clocks_rx_user_weights_2_12_imag',
-            'io_ctrl_and_clocks_rx_user_weights_2_13_real',
-            'io_ctrl_and_clocks_rx_user_weights_2_13_imag',
-            'io_ctrl_and_clocks_rx_user_weights_2_14_real',
-            'io_ctrl_and_clocks_rx_user_weights_2_14_imag',
-            'io_ctrl_and_clocks_rx_user_weights_2_15_real',
-            'io_ctrl_and_clocks_rx_user_weights_2_15_imag',
-            'io_ctrl_and_clocks_rx_user_weights_3_0_real',
-            'io_ctrl_and_clocks_rx_user_weights_3_0_imag',
-            'io_ctrl_and_clocks_rx_user_weights_3_1_real',
-            'io_ctrl_and_clocks_rx_user_weights_3_1_imag',
-            'io_ctrl_and_clocks_rx_user_weights_3_2_real',
-            'io_ctrl_and_clocks_rx_user_weights_3_2_imag',
-            'io_ctrl_and_clocks_rx_user_weights_3_3_real',
-            'io_ctrl_and_clocks_rx_user_weights_3_3_imag',
-            'io_ctrl_and_clocks_rx_user_weights_3_4_real',
-            'io_ctrl_and_clocks_rx_user_weights_3_4_imag',
-            'io_ctrl_and_clocks_rx_user_weights_3_5_real',
-            'io_ctrl_and_clocks_rx_user_weights_3_5_imag',
-            'io_ctrl_and_clocks_rx_user_weights_3_6_real',
-            'io_ctrl_and_clocks_rx_user_weights_3_6_imag',
-            'io_ctrl_and_clocks_rx_user_weights_3_7_real',
-            'io_ctrl_and_clocks_rx_user_weights_3_7_imag',
-            'io_ctrl_and_clocks_rx_user_weights_3_8_real',
-            'io_ctrl_and_clocks_rx_user_weights_3_8_imag',
-            'io_ctrl_and_clocks_rx_user_weights_3_9_real',
-            'io_ctrl_and_clocks_rx_user_weights_3_9_imag',
-            'io_ctrl_and_clocks_rx_user_weights_3_10_real',
-            'io_ctrl_and_clocks_rx_user_weights_3_10_imag',
-            'io_ctrl_and_clocks_rx_user_weights_3_11_real',
-            'io_ctrl_and_clocks_rx_user_weights_3_11_imag',
-            'io_ctrl_and_clocks_rx_user_weights_3_12_real',
-            'io_ctrl_and_clocks_rx_user_weights_3_12_imag',
-            'io_ctrl_and_clocks_rx_user_weights_3_13_real',
-            'io_ctrl_and_clocks_rx_user_weights_3_13_imag',
-            'io_ctrl_and_clocks_rx_user_weights_3_14_real',
-            'io_ctrl_and_clocks_rx_user_weights_3_14_imag',
-            'io_ctrl_and_clocks_rx_user_weights_3_15_real',
-            'io_ctrl_and_clocks_rx_user_weights_3_15_imag',
-            'io_ctrl_and_clocks_from_serdes_scan_0_valid',
-            'io_ctrl_and_clocks_from_dsp_scan_0_valid',
-            'io_ctrl_and_clocks_to_serdes_mode_0',
-            'io_ctrl_and_clocks_from_serdes_scan_1_valid',
-            'io_ctrl_and_clocks_from_dsp_scan_1_valid',
-            'io_ctrl_and_clocks_to_serdes_mode_1',
-            'io_ctrl_and_clocks_from_serdes_scan_2_valid',
-            'io_ctrl_and_clocks_from_dsp_scan_2_valid',
-            'io_ctrl_and_clocks_to_serdes_mode_2',
-            'io_ctrl_and_clocks_from_serdes_scan_3_valid',
-            'io_ctrl_and_clocks_from_dsp_scan_3_valid',
-            'io_ctrl_and_clocks_to_serdes_mode_3',
-            'io_ctrl_and_clocks_to_dsp_mode_0',
-            'io_ctrl_and_clocks_to_dsp_mode_1',
-            'io_ctrl_and_clocks_to_dsp_mode_2',
-            'io_ctrl_and_clocks_to_dsp_mode_3',
-            'io_ctrl_and_clocks_to_dsp_mode_4',
-            'io_ctrl_and_clocks_to_dsp_mode_5'
-        ]
+            ]
+        for serdes in range(self.nserdes):
+            oneslist+=['io_lanes_tx_%s_ready' %(serdes), 'io_lanes_rx_%s_valid' %(serdes) ]
+
+        for tx in range(self.Txantennas):
+            for user in range(self.Users):
+                oneslist+=['io_ctrl_and_clocks_tx_user_weights_%s_%s_real' %(tx,user),
+                           'io_ctrl_and_clocks_tx_user_weights_%s_%s_imag' %(tx,user)]
+        for rx in range(self.Rxantennas):
+            for user in range(self.Users):
+                oneslist+=['io_ctrl_and_clocks_rx_user_weights_%s_%s_real' %(rx,user),
+                           'io_ctrl_and_clocks_rx_user_weights_%s_%s_imag' %(rx,user)]
+        for scanind in range(self.nserdes+2):
+            oneslist+=[ 'io_ctrl_and_clocks_from_serdes_scan_%s_valid' %(scanind),
+            'io_ctrl_and_clocks_from_dsp_scan_%s_valid' %(scanind),
+            'io_ctrl_and_clocks_to_serdes_mode_%s' %(scanind)]
+
+        for scanind in range(self.nserdes+4):
+            oneslist+=[ 'io_ctrl_and_clocks_to_dsp_mode_%s' %(scanind)]
+
         for name in oneslist:
             self.tb.connectors.Members[name].init='\'b1'
 
-        # initialize Selected signals with parameter values
-        # (These are one-to-one mappings. Trickier to generalize)
+        # Initialize Selected signals with parameter values
         paramlist=[
-            ('lane_refclk_Ndiv', 'g_lane_refclk_Ndiv'),
-            ('lane_refclk_shift', 'g_lane_refclk_shift'),
-            ('io_ctrl_and_clocks_tx_Ndiv', 'tx_c_ratio'),
-            ('io_ctrl_and_clocks_tx_clkdiv_shift', 'g_tx_shift'),
-            ('io_ctrl_and_clocks_rx_Ndiv', 'rx_c_ratio'),
-            ('io_ctrl_and_clocks_rx_clkdiv_shift', 'g_rx_shift'),
-            ('io_ctrl_and_clocks_user_spread_mode', 'g_tx_user_spread_mode'),
-            ('io_ctrl_and_clocks_interpolator_controls_0_cic3derivscale', 'g_tx_scale3'),
-            ('io_ctrl_and_clocks_interpolator_controls_0_cic3derivshift', 'g_tx_cic3shift'),
-            ('io_ctrl_and_clocks_interpolator_controls_0_hb1scale', 'g_tx_scale0'),
-            ('io_ctrl_and_clocks_interpolator_controls_0_hb2scale', 'g_tx_scale1'),
-            ('io_ctrl_and_clocks_interpolator_controls_0_hb3scale', 'g_tx_scale2'),
-            ('io_ctrl_and_clocks_interpolator_controls_0_mode', 'g_tx_interpolator_mode'),
-            ('io_ctrl_and_clocks_user_sum_mode_0', 'g_tx_user_sum_mode'),
-            ('io_ctrl_and_clocks_user_select_index_0', 'g_tx_user_select_index'),
-            ('io_ctrl_and_clocks_dac_data_mode_0', 'g_tx_dac_data_mode'),
-            ('io_ctrl_and_clocks_interpolator_controls_1_cic3derivscale', 'g_tx_scale3'),
-            ('io_ctrl_and_clocks_interpolator_controls_1_cic3derivshift', 'g_tx_cic3shift'),
-            ('io_ctrl_and_clocks_interpolator_controls_1_hb1scale', 'g_tx_scale0'),
-            ('io_ctrl_and_clocks_interpolator_controls_1_hb2scale', 'g_tx_scale1'),
-            ('io_ctrl_and_clocks_interpolator_controls_1_hb3scale', 'g_tx_scale2'),
-            ('io_ctrl_and_clocks_interpolator_controls_1_mode', 'g_tx_interpolator_mode'),
-            ('io_ctrl_and_clocks_user_sum_mode_1', 'g_tx_user_sum_mode'),
-            ('io_ctrl_and_clocks_user_select_index_1', 'g_tx_user_select_index'),
-            ('io_ctrl_and_clocks_dac_data_mode_1', 'g_tx_dac_data_mode'),
-            ('io_ctrl_and_clocks_interpolator_controls_2_cic3derivscale', 'g_tx_scale3'),
-            ('io_ctrl_and_clocks_interpolator_controls_2_cic3derivshift', 'g_tx_cic3shift'),
-            ('io_ctrl_and_clocks_interpolator_controls_2_hb1scale', 'g_tx_scale0'),
-            ('io_ctrl_and_clocks_interpolator_controls_2_hb2scale', 'g_tx_scale1'),
-            ('io_ctrl_and_clocks_interpolator_controls_2_hb3scale', 'g_tx_scale2'),
-            ('io_ctrl_and_clocks_interpolator_controls_2_mode', 'g_tx_interpolator_mode'),
-            ('io_ctrl_and_clocks_user_sum_mode_2', 'g_tx_user_sum_mode'),
-            ('io_ctrl_and_clocks_user_select_index_2', 'g_tx_user_select_index'),
-            ('io_ctrl_and_clocks_dac_data_mode_2', 'g_tx_dac_data_mode'),
-            ('io_ctrl_and_clocks_interpolator_controls_3_cic3derivscale', 'g_tx_scale3'),
-            ('io_ctrl_and_clocks_interpolator_controls_3_cic3derivshift', 'g_tx_cic3shift'),
-            ('io_ctrl_and_clocks_interpolator_controls_3_hb1scale', 'g_tx_scale0'),
-            ('io_ctrl_and_clocks_interpolator_controls_3_hb2scale', 'g_tx_scale1'),
-            ('io_ctrl_and_clocks_interpolator_controls_3_hb3scale', 'g_tx_scale2'),
-            ('io_ctrl_and_clocks_interpolator_controls_3_mode', 'g_tx_interpolator_mode'),
-            ('io_ctrl_and_clocks_user_sum_mode_3', 'g_tx_user_sum_mode'),
-            ('io_ctrl_and_clocks_user_select_index_3', 'g_tx_user_select_index'),
-            ('io_ctrl_and_clocks_dac_data_mode_3', 'g_tx_dac_data_mode'),
-            ('io_ctrl_and_clocks_decimator_controls_0_cic3integscale', 'g_rx_scale0'),
-            ('io_ctrl_and_clocks_decimator_controls_0_cic3integshift', 'g_rx_cic3shift'),
-            ('io_ctrl_and_clocks_decimator_controls_0_hb1scale', 'g_rx_scale1'),
-            ('io_ctrl_and_clocks_decimator_controls_0_hb2scale', 'g_rx_scale2'),
-            ('io_ctrl_and_clocks_decimator_controls_0_hb3scale', 'g_rx_scale3'),
-            ('io_ctrl_and_clocks_decimator_controls_0_mode', 'g_rx_mode'),
-            ('io_ctrl_and_clocks_inv_adc_clk_pol_0', 'g_rx_inv_adc_clk_pol'),
-            ('io_ctrl_and_clocks_decimator_controls_1_cic3integscale', 'g_rx_scale0'),
-            ('io_ctrl_and_clocks_decimator_controls_1_cic3integshift', 'g_rx_cic3shift'),
-            ('io_ctrl_and_clocks_decimator_controls_1_hb1scale', 'g_rx_scale1'),
-            ('io_ctrl_and_clocks_decimator_controls_1_hb2scale', 'g_rx_scale2'),
-            ('io_ctrl_and_clocks_decimator_controls_1_hb3scale', 'g_rx_scale3'),
-            ('io_ctrl_and_clocks_decimator_controls_1_mode', 'g_rx_mode'),
-            ('io_ctrl_and_clocks_inv_adc_clk_pol_1', 'g_rx_inv_adc_clk_pol'),
-            ('io_ctrl_and_clocks_decimator_controls_2_cic3integscale', 'g_rx_scale0'),
-            ('io_ctrl_and_clocks_decimator_controls_2_cic3integshift', 'g_rx_cic3shift'),
-            ('io_ctrl_and_clocks_decimator_controls_2_hb1scale', 'g_rx_scale1'),
-            ('io_ctrl_and_clocks_decimator_controls_2_hb2scale', 'g_rx_scale2'),
-            ('io_ctrl_and_clocks_decimator_controls_2_hb3scale', 'g_rx_scale3'),
-            ('io_ctrl_and_clocks_decimator_controls_2_mode', 'g_rx_mode'),
-            ('io_ctrl_and_clocks_inv_adc_clk_pol_2', 'g_rx_inv_adc_clk_pol'),
-            ('io_ctrl_and_clocks_decimator_controls_3_cic3integscale', 'g_rx_scale0'),
-            ('io_ctrl_and_clocks_decimator_controls_3_cic3integshift', 'g_rx_cic3shift'),
-            ('io_ctrl_and_clocks_decimator_controls_3_hb1scale', 'g_rx_scale1'),
-            ('io_ctrl_and_clocks_decimator_controls_3_hb2scale', 'g_rx_scale2'),
-            ('io_ctrl_and_clocks_decimator_controls_3_hb3scale', 'g_rx_scale3'),
-            ('io_ctrl_and_clocks_decimator_controls_3_mode', 'g_rx_mode'),
-            ('io_ctrl_and_clocks_inv_adc_clk_pol_3', 'g_rx_inv_adc_clk_pol'),
-            ('io_ctrl_and_clocks_user_index', 'g_rx_user_index'),
-            ('io_ctrl_and_clocks_antenna_index', 'g_rx_antenna_index'),
-            ('io_ctrl_and_clocks_rx_output_mode', 'g_rx_output_mode'),
-            ('io_ctrl_and_clocks_input_mode', 'g_rx_input_mode'),
-            ('io_ctrl_and_clocks_adc_fifo_lut_mode', 'g_rx_adc_fifo_lut_mode'),
-        ]
+                ('lane_refclk_Ndiv', 'g_lane_refclk_Ndiv'),
+                ('lane_refclk_shift', 'g_lane_refclk_shift'),
+                ('io_ctrl_and_clocks_tx_Ndiv', 'tx_c_ratio'),
+                ('io_ctrl_and_clocks_tx_clkdiv_shift', 'g_tx_shift'),
+                ('io_ctrl_and_clocks_rx_Ndiv', 'rx_c_ratio'),
+                ('io_ctrl_and_clocks_rx_clkdiv_shift', 'g_rx_shift'),
+                ('io_ctrl_and_clocks_user_spread_mode', 'g_tx_user_spread_mode'),
+                ('io_ctrl_and_clocks_user_index', 'g_rx_user_index'),
+                ('io_ctrl_and_clocks_antenna_index', 'g_rx_antenna_index'),
+                ('io_ctrl_and_clocks_rx_output_mode', 'g_rx_output_mode'),
+                ('io_ctrl_and_clocks_input_mode', 'g_rx_input_mode'),
+                ('io_ctrl_and_clocks_adc_fifo_lut_mode', 'g_rx_adc_fifo_lut_mode')
+            ]
+        for tx in range(self.Txantennas):
+            paramlist+=[
+                ('io_ctrl_and_clocks_interpolator_controls_%s_cic3derivscale' %(tx), 
+                    'g_tx_scale3'),
+                ('io_ctrl_and_clocks_interpolator_controls_%s_cic3derivshift' %(tx), 
+                    'g_tx_cic3shift'),
+                ('io_ctrl_and_clocks_interpolator_controls_%s_hb1scale' %(tx), 
+                    'g_tx_scale0'),
+                ('io_ctrl_and_clocks_interpolator_controls_%s_hb2scale' %(tx), 
+                    'g_tx_scale1'),
+                ('io_ctrl_and_clocks_interpolator_controls_%s_hb3scale' %(tx), 
+                    'g_tx_scale2'),
+                ('io_ctrl_and_clocks_interpolator_controls_%s_mode' %(tx), 
+                    'g_tx_interpolator_mode'),
+                ('io_ctrl_and_clocks_user_sum_mode_%s' %(tx), 'g_tx_user_sum_mode'),
+                ('io_ctrl_and_clocks_user_select_index_%s' %(tx), 'g_tx_user_select_index'),
+                ('io_ctrl_and_clocks_dac_data_mode_%s' %(tx), 'g_tx_dac_data_mode')
+            ]
+
+        for rx in range(self.Rxantennas):
+            paramlist+=[
+                ('io_ctrl_and_clocks_decimator_controls_%s_cic3integscale' %(rx), 
+                    'g_rx_scale0'),
+                ('io_ctrl_and_clocks_decimator_controls_%s_cic3integshift' %(rx), 
+                    'g_rx_cic3shift'),
+                ('io_ctrl_and_clocks_decimator_controls_%s_hb1scale' %(rx), 
+                    'g_rx_scale1'),
+                ('io_ctrl_and_clocks_decimator_controls_%s_hb2scale' %(rx), 
+                    'g_rx_scale2'),
+                ('io_ctrl_and_clocks_decimator_controls_%s_hb3scale' %(rx), 
+                    'g_rx_scale3'),
+                ('io_ctrl_and_clocks_decimator_controls_%s_mode' %(rx), 
+                    'g_rx_mode'),
+                ('io_ctrl_and_clocks_inv_adc_clk_pol_%s' %(rx), 
+                    'g_rx_inv_adc_clk_pol')
+            ]
+        # Loop to define the inits
         for name in paramlist:
             self.tb.connectors.Members[name[0]].init=name[1]
 
+        # All signals are now available, it is possible to initialize 
+        # Reset sequence
+        # This does redefinitions to inits, it must be here
+        self.reset_sequence_gen()
+
         # IO file connector definitions
         # Define what signals and in which order and format are read form the files
+        # i.e. verilog_connectors of the file
         name='Z'
         ionames=[]
         for count in range(self.Rxantennas):
@@ -859,7 +574,8 @@ end"""
         self.iofile_bundle.Members[name].verilog_connectors=\
                 self.tb.connectors.list(names=ionames)
 
-        #Here start the testbench contents
+        # This should be a method too
+        # Start the testbench contents
         self.tb.contents="""
 //timescale 1ps this should probably be a global model parameter
 parameter integer c_Ts=1/(g_Rs_high*1e-12);
