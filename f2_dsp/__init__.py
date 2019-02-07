@@ -60,6 +60,7 @@ class f2_dsp(verilog,thesdk):
         self.Txbits=9  #DAC bits
         self.Channeldir='Uplink'
         self.iptr_A=IO()
+        self.scan=IO()
         self.dsp_decimator_model='py'
         self.dsp_decimator_scales=[1,1,1,1]
         self.dsp_decimator_cic3shift=0
@@ -77,6 +78,8 @@ class f2_dsp(verilog,thesdk):
             parent=arg[0]
             self.copy_propval(parent,self.proplist)
             self.parent =parent;
+        self.scan=IO()
+        self.scan.Data=Bundle()
 
         self.iptr_A.Data=[IO() for _ in range(self.Rxantennas)]
         self._Z_real_t=[ IO() for _ in range(self.Txantennas) ]
@@ -128,7 +131,6 @@ class f2_dsp(verilog,thesdk):
         _=verilog_iofile(self,name='io_lanes_rx',dir='in')
         _=verilog_iofile(self,name='A',dir='in')
         _=verilog_iofile(self,name='serdestest_write',dir='in',iotype='ctrl')
-        _=verilog_iofile(self,name='reset_sequence',dir='in',iotype='ctrl')
 
         self.vlogmodulefiles =list(['clkdiv_n_2_4_8.v', 'AsyncResetReg.v'])
         self.vlogparameters=dict([ ('g_Rs_high',self.Rs), ('g_Rs_low',self.Rs_dsp),
@@ -160,13 +162,16 @@ class f2_dsp(verilog,thesdk):
             ("g_lane_refclk_shift","0")
             ])
 
-        self.define_testbench()
-        self.tb.export(force=True)
 
     def run_tx(self):
         if self.model=='py':
             self.tx_dsp.run()
         elif self.model=='sv':
+            for name, val in self.scan.Data.Members.items():
+                # These files are created under f2_scan_controller
+                self.iofile_bundle.Members[name]=val
+            self.define_testbench()
+            self.tb.export(force=True)
             self.write_infile()
             self.run_verilog()
             self.read_outfile()
@@ -177,8 +182,12 @@ class f2_dsp(verilog,thesdk):
             self.rx_dsp.init()
             self.rx_dsp.run()
         elif self.model=='sv':
+            for name, val in self.scan.Data.Members.items():
+                self.iofile_bundle.Members[name]=val
+            print(self.iofile_bundle.Members)
+            self.define_testbench()
+            self.tb.export(force=True)
             self.write_infile()
-            #define outfiles
             self.run_verilog()
             self.read_outfile()
             del self.iofile_bundle
@@ -249,61 +258,6 @@ class f2_dsp(verilog,thesdk):
                     self.queue.put(self._Z_imag_t[i].Data.reshape(-1,1))
                     self.queue.put(self._Z_imag_b[i].Data.reshape(-1,1))
 
-    def reset_sequence_gen(self):
-        reset_time=int(128/(self.Rs*1e-12))
-        # This modiefies testbench, so testbench must exist before callint this
-        f=self.iofile_bundle.Members['reset_sequence']
-        
-        #Define the connectors associeted with this file
-        conns=[
-            'reset',
-            'reset_clock_div',
-            'io_ctrl_and_clocks_tx_reset_clkdiv',
-            'io_ctrl_and_clocks_rx_reset_clkdiv',
-            'lane_refclk_reset',
-            'io_ctrl_and_clocks_reset_dacfifo',
-            'io_ctrl_and_clocks_reset_outfifo',
-            'io_ctrl_and_clocks_reset_infifo',
-            'reset_loop',
-            'io_ctrl_and_clocks_reset_adcfifo'
-        ]
-        ## Start initializations
-        #Init the signals connected to the dut input to zero
-        for name in conns: 
-            self.tb.connectors.Members[name].init=''
-        f.verilog_connectors=self.tb.connectors.list(names=conns)
-
-        # Define the control sequence time and data values
-        # [TODO]: de-init could be added to this method
-        f.set_control_data(init=1) # Initialize to ones at time 0
-
-        # After awhile, switch off reset of some blocks 
-        time=reset_time
-        for name in [ 
-                      'reset_clock_div', 
-                      'io_ctrl_and_clocks_tx_reset_clkdiv',
-                      'io_ctrl_and_clocks_rx_reset_clkdiv',
-                      'lane_refclk_reset',
-                      'io_ctrl_and_clocks_reset_dacfifo',
-                      'io_ctrl_and_clocks_reset_outfifo',                      
-                      'io_ctrl_and_clocks_reset_infifo'
-                      ]:
-            f.set_control_data(time=time,name=name,val=0)
-
-        # Switch off the master reset
-        time=2*reset_time
-        for name in [ 
-                      'reset', 
-                      ]:
-            f.set_control_data(time=time,name=name,val=0)
-
-        # Switch off the last ones
-        time=16*reset_time
-        for name in [ 
-                      'reset_loop', 
-                      'io_ctrl_and_clocks_reset_adcfifo' 
-                      ]:
-            f.set_control_data(time=time,name=name,val=0)
      
     # Define method that generates reset sewunce verilog
     def reset_sequence(self):
@@ -393,16 +347,29 @@ end"""
         # This is a bundle of connectors connected to clockdivider ios
         # Signals/regs connected to clockdivider are automatically availabe
         # Some of them need to be renamed (mv)
-        clockdivider.io_signals.mv(fro='reset',to='reset_clock_div')
         clockdivider.io_signals.mv(fro='io_Ndiv',to='lane_refclk_Ndiv')
         clockdivider.io_signals.mv(fro='io_shift',to='lane_refclk_shift')
-        clockdivider.io_signals.mv(fro='io_reset_clk',to='lane_refclk_reset')
         clockdivider.io_signals.mv(fro='io_clkpn',to='lane_refclk')
+
+        #These are defined in scan input
+        clockdivider.io_signals.mv(fro='io_reset_clk',to='lane_refclk_reset')
+        clockdivider.io_signals.mv(fro='reset',to='reset_clock_div')
 
         # Add clocdivider and dut io signals to testbench connectors
         # Dut is creted automaticaly, if verilog file for it exists
         self.tb.connectors.update(bundle=clockdivider.io_signals.Members)
         self.tb.connectors.update(bundle=self.tb.dut_instance.io_signals.Members)
+        for connector in self.scan.Data.Members['reset_sequence'].verilog_connectors:
+            self.tb.connectors.Members[connector.name]=connector
+            try: 
+                self.dut.ios.Members[connector.name].connect=connector
+            except:
+                pass
+
+            try: 
+                clkdivider.ios.Members[connector.name].connect=connector
+            except:
+                pass
 
         # Some signals needed to control the sim
         self.tb.connectors.new(name='reset_loop', cls='reg') #Redundant?
@@ -517,7 +484,7 @@ end"""
         # All signals are now available, it is possible to initialize 
         # Reset sequence
         # This does redefinitions to inits, it must be here
-        self.reset_sequence_gen()
+        #self.reset_sequence_gen()
 
         # IO file connector definitions
         # Define what signals and in which order and format are read form the files
