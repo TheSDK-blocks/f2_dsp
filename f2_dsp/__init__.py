@@ -130,7 +130,6 @@ class f2_dsp(verilog,thesdk):
         _=verilog_iofile(self,name='io_lanes_tx')
         _=verilog_iofile(self,name='io_lanes_rx',dir='in')
         _=verilog_iofile(self,name='A',dir='in')
-        _=verilog_iofile(self,name='serdestest_write',dir='in',iotype='ctrl')
 
         self.vlogmodulefiles =list(['clkdiv_n_2_4_8.v', 'AsyncResetReg.v'])
         self.vlogparameters=dict([ ('g_Rs_high',self.Rs), ('g_Rs_low',self.Rs_dsp),
@@ -184,7 +183,6 @@ class f2_dsp(verilog,thesdk):
         elif self.model=='sv':
             for name, val in self.scan.Data.Members.items():
                 self.iofile_bundle.Members[name]=val
-            print(self.iofile_bundle.Members)
             self.define_testbench()
             self.tb.export(force=True)
             self.write_infile()
@@ -193,30 +191,28 @@ class f2_dsp(verilog,thesdk):
             del self.iofile_bundle
 
     def write_infile(self):
+        #Input file data definitions
         for i in range(self.nserdes):
             for k in range(self.Users):
                 if i==0 and k==0:
                     indata=self._io_lanes_rx[i].data[k].udata.Data.reshape(-1,1)
                 else:
                     indata=np.r_['1',indata,self._io_lanes_rx[i].data[k].udata.Data.reshape(-1,1)]
-        #This adds an iofile to self.iiofiles list
         self.iofile_bundle.Members['io_lanes_rx'].data=indata
-        self.iofile_bundle.Members['io_lanes_rx'].write()
         indata=None #Clear variable to save memory
-        self.iofile_bundle.Members['serdestest_write'].data=np.array([0, 0]).reshape(-1,2)
-        self.iofile_bundle.Members['serdestest_write'].write()
-        self.iofile_bundle.Members['reset_sequence'].write()
-
 
         for i in range(self.Rxantennas):
             if i==0:
                 indata=self.iptr_A.Data[i].Data.reshape(-1,1)
             else:
                 indata=np.r_['1',indata,self.iptr_A.Data[i].Data.reshape(-1,1)]
-        #This adds an iofile to self.iofiles list
         self.iofile_bundle.Members['A'].data=indata
-        self.iofile_bundle.Members['A'].write()
         indata=None #Clear variable to save memory
+
+        # This could ba a method somewhere
+        for name, val in self.iofile_bundle.Members.items():
+            if val.dir=='in':
+                self.iofile_bundle.Members[name].write()
 
     def read_outfile(self):
         #Handle the ofiles here as you see the best
@@ -261,61 +257,9 @@ class f2_dsp(verilog,thesdk):
      
     # Define method that generates reset sewunce verilog
     def reset_sequence(self):
-        reset_sequence='begin\n'+self.iofile_bundle.Members['reset_sequence'].verilog_io+"""
-memaddrcount=0;
+        reset_sequence='begin\n'+self.iofile_bundle.Members['reset'].verilog_io+"""
 //Init the LUT
-    while (memaddrcount<2**9) begin
-       //This is really controlled by Scan, but we do not have scan model
-       @(posedge io_clkp8n)
-       io_ctrl_and_clocks_dac_lut_write_en_0<=1;
-       io_ctrl_and_clocks_dac_lut_write_en_1<=1;
-       io_ctrl_and_clocks_dac_lut_write_en_2<=1;
-       io_ctrl_and_clocks_dac_lut_write_en_3<=1;
-       io_ctrl_and_clocks_dac_lut_write_addr_0<=memaddrcount;
-       io_ctrl_and_clocks_dac_lut_write_addr_1<=memaddrcount;
-       io_ctrl_and_clocks_dac_lut_write_addr_2<=memaddrcount;
-       io_ctrl_and_clocks_dac_lut_write_addr_3<=memaddrcount;
-       io_ctrl_and_clocks_adc_lut_write_en<=1;
-       io_ctrl_and_clocks_adc_lut_write_addr<=memaddrcount;
-       if (memaddrcount < 2**8) begin
-          io_ctrl_and_clocks_dac_lut_write_vals_0_real<=memaddrcount+2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_1_real<=memaddrcount+2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_2_real<=memaddrcount+2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_3_real<=memaddrcount+2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_0_imag<=memaddrcount+2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_1_imag<=memaddrcount+2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_2_imag<=memaddrcount+2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_3_imag<=memaddrcount+2**8;
-       end
-       else begin
-          io_ctrl_and_clocks_dac_lut_write_vals_0_real<=memaddrcount-2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_1_real<=memaddrcount-2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_2_real<=memaddrcount-2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_3_real<=memaddrcount-2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_0_imag<=memaddrcount-2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_1_imag<=memaddrcount-2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_2_imag<=memaddrcount-2**8;
-          io_ctrl_and_clocks_dac_lut_write_vals_3_imag<=memaddrcount-2**8;
-        end
-       //ADC ctrl_and_clocks_LUT
-       io_ctrl_and_clocks_adc_lut_write_en<=1;
-       io_ctrl_and_clocks_adc_lut_write_addr<=memaddrcount;
-       io_ctrl_and_clocks_adc_lut_write_vals_0_real<=memaddrcount;
-       io_ctrl_and_clocks_adc_lut_write_vals_1_real<=memaddrcount;
-       io_ctrl_and_clocks_adc_lut_write_vals_2_real<=memaddrcount;
-       io_ctrl_and_clocks_adc_lut_write_vals_3_real<=memaddrcount;
-       io_ctrl_and_clocks_adc_lut_write_vals_0_imag<=memaddrcount;
-       io_ctrl_and_clocks_adc_lut_write_vals_1_imag<=memaddrcount;
-       io_ctrl_and_clocks_adc_lut_write_vals_2_imag<=memaddrcount;
-       io_ctrl_and_clocks_adc_lut_write_vals_3_imag<=memaddrcount;
-       @(posedge io_clkp8n)
-       memaddrcount=memaddrcount+1;
-       io_ctrl_and_clocks_dac_lut_write_en_0<=0;
-       io_ctrl_and_clocks_dac_lut_write_en_1<=0;
-       io_ctrl_and_clocks_dac_lut_write_en_2<=0;
-       io_ctrl_and_clocks_dac_lut_write_en_3<=0;
-       io_ctrl_and_clocks_adc_lut_write_en<=0;
-    end
+"""+self.iofile_bundle.Members['adclut'].verilog_io+self.iofile_bundle.Members['daclut'].verilog_io+"""
     io_ctrl_and_clocks_adc_lut_reset<=0;
     initdone<=1; //Flags that we are initiaized
 end"""
@@ -359,7 +303,8 @@ end"""
         # Dut is creted automaticaly, if verilog file for it exists
         self.tb.connectors.update(bundle=clockdivider.io_signals.Members)
         self.tb.connectors.update(bundle=self.tb.dut_instance.io_signals.Members)
-        for connector in self.scan.Data.Members['reset_sequence'].verilog_connectors:
+
+        for connector in self.scan.Data.Members['reset'].verilog_connectors:
             self.tb.connectors.Members[connector.name]=connector
             try: 
                 self.dut.ios.Members[connector.name].connect=connector
@@ -481,11 +426,6 @@ end"""
         for name in paramlist:
             self.tb.connectors.Members[name[0]].init=name[1]
 
-        # All signals are now available, it is possible to initialize 
-        # Reset sequence
-        # This does redefinitions to inits, it must be here
-        #self.reset_sequence_gen()
-
         # IO file connector definitions
         # Define what signals and in which order and format are read form the files
         # i.e. verilog_connectors of the file
@@ -529,17 +469,6 @@ end"""
         self.iofile_bundle.Members[name].verilog_connectors=\
                 self.tb.connectors.list(names=ionames)
 
-        name='serdestest_write'
-        ionames=[]
-        ionames+=['io_ctrl_and_clocks_serdestest_scan_write_mode',
-                  'io_ctrl_and_clocks_serdestest_scan_write_address']
-        #ionames.append('io_ctrl_and_clocks_serdestest_scan_write_en')
-        #ionames.append('io_ctrl_and_clocks_serdestest_scan_write_value_rxindex')
-        #for user in range(self.Users):
-        #    ionames.append('io_ctrl_and_clocks_serdestest_scan_write_value_data_%s_udata_real' %(user))
-        #    ionames.append('io_ctrl_and_clocks_serdestest_scan_write_value_data_%s_udata_imag' %(user))
-        self.iofile_bundle.Members[name].verilog_connectors=\
-                self.tb.connectors.list(names=ionames)
 
         # This should be a method too
         # Start the testbench contents
@@ -615,7 +544,7 @@ end
             while (!$feof(f_A)) begin
                 @(posedge io_ctrl_and_clocks_adc_clocks_0 )
                 """+self.iofile_bundle.Members['A'].verilog_io+"""
-            end\n"""+self.iofile_bundle.Members['serdestest_write'].verilog_io +"""
+            end
             rxdone<=1;
         end
     join
