@@ -153,7 +153,6 @@ class f2_dsp(verilog,thesdk):
             ('g_rx_mode',self.rx_dsp.mode), ##Propagates from decimator. Check if this is ok
             ('g_rx_user_index', 0),
             ('g_rx_antenna_index', 0),
-            ('g_rx_output_mode', self.rx_output_mode),
             ('g_rx_input_mode', 0),
             ("g_rx_inv_adc_clk_pol",1),
             ('g_rx_adc_fifo_lut_mode' ,2),
@@ -380,7 +379,6 @@ end"""
                 ('io_ctrl_and_clocks_user_spread_mode', 'g_tx_user_spread_mode'),
                 ('io_ctrl_and_clocks_user_index', 'g_rx_user_index'),
                 ('io_ctrl_and_clocks_antenna_index', 'g_rx_antenna_index'),
-                ('io_ctrl_and_clocks_rx_output_mode', 'g_rx_output_mode'),
                 ('io_ctrl_and_clocks_input_mode', 'g_rx_input_mode'),
                 ('io_ctrl_and_clocks_adc_fifo_lut_mode', 'g_rx_adc_fifo_lut_mode')
             ]
