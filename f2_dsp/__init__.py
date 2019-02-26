@@ -257,9 +257,7 @@ class f2_dsp(verilog,thesdk):
      
     # Define method that generates reset sewunce verilog
     def reset_sequence(self):
-        reset_sequence='begin\n'+self.iofile_bundle.Members['reset'].verilog_io+"""
-//Init the LUT
-"""+self.iofile_bundle.Members['adclut'].verilog_io+self.iofile_bundle.Members['daclut'].verilog_io+"""
+        reset_sequence='begin\n'+self.iofile_bundle.Members['scan_inputs'].verilog_io+"""
     io_ctrl_and_clocks_adc_lut_reset<=0;
     initdone<=1; //Flags that we are initiaized
 end"""
@@ -304,7 +302,7 @@ end"""
         self.tb.connectors.update(bundle=clockdivider.io_signals.Members)
         self.tb.connectors.update(bundle=self.tb.dut_instance.io_signals.Members)
 
-        for connector in self.scan.Data.Members['reset'].verilog_connectors:
+        for connector in self.scan.Data.Members['scan_inputs'].verilog_connectors:
             self.tb.connectors.Members[connector.name]=connector
             try: 
                 self.dut.ios.Members[connector.name].connect=connector
