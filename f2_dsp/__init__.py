@@ -35,8 +35,8 @@ class f2_dsp(verilog,thesdk):
                         'Channeldir',
                         'CPUFBMODE',
                         'DSPmode',
-                        'dsp_decimator_scales',     # Scales for the rx decimator chain
-                        'dsp_decimator_cic3shift',  # Left-shift for the decimator cic integrator
+                        'dsp_decimator_scales',        # Scales for the rx decimator chain
+                        'dsp_decimator_cic3shift',     # Left-shift for the decimator cic integrator
                         'dsp_interpolator_scales',     # Scales for the tx interpolator chain
                         'dsp_interpolator_cic3shift',  # Left-shift for the interpolator cic integrator
                         'rx_output_mode',
@@ -78,6 +78,8 @@ class f2_dsp(verilog,thesdk):
             parent=arg[0]
             self.copy_propval(parent,self.proplist)
             self.parent =parent;
+        # Control signals are defined in f2_scan_controller and driven
+        # Through scan IO 
         self.scan=IO()
         self.scan.Data=Bundle()
 
@@ -95,6 +97,7 @@ class f2_dsp(verilog,thesdk):
         # Aim is to make it resemple the actual circuit as closely as possible
         #Tx
         self.tx_dsp=f2_tx_dsp(self)
+        self.tx_dsp.interpolator_scales=self.dsp_interpolator_scales
 
         #Antenna outputs
         self._Z_real_t=self.tx_dsp._Z_real_t
@@ -133,33 +136,7 @@ class f2_dsp(verilog,thesdk):
 
         self.vlogmodulefiles =list(['clkdiv_n_2_4_8.v', 'AsyncResetReg.v'])
         self.vlogparameters=dict([ ('g_Rs_high',self.Rs), ('g_Rs_low',self.Rs_dsp),
-            ('g_tx_shift'            , 0),
-            ('g_tx_scale0'           , self.dsp_interpolator_scales[0]),
-            ('g_tx_scale1'           , self.dsp_interpolator_scales[1]),
-            ('g_tx_scale2'           , self.dsp_interpolator_scales[2]),
-            ('g_tx_scale3'           , self.dsp_interpolator_scales[3]),
-            ('g_tx_cic3shift'        , self.dsp_interpolator_cic3shift),
-            ('g_tx_user_spread_mode' , 0),
-            ('g_tx_user_sum_mode'    , 0),
-            ('g_tx_user_select_index', 0),
-            ('g_tx_interpolator_mode', 4),
-            ('g_tx_dac_data_mode'    , 6),
-            ('g_rx_shift'            , 0),
-            ('g_rx_scale0',self.dsp_decimator_scales[0]),
-            ('g_rx_scale1',self.dsp_decimator_scales[1]),
-            ('g_rx_scale2',self.dsp_decimator_scales[2]),
-            ('g_rx_scale3',self.dsp_decimator_scales[3]),
-            ('g_rx_cic3shift', self.dsp_decimator_cic3shift),
-            ('g_rx_mode',self.rx_dsp.mode), ##Propagates from decimator. Check if this is ok
-            ('g_rx_user_index', 0),
-            ('g_rx_antenna_index', 0),
-            ('g_rx_input_mode', 0),
-            ("g_rx_inv_adc_clk_pol",1),
-            ('g_rx_adc_fifo_lut_mode' ,2),
-            ("g_lane_refclk_Ndiv",2), #This should be at least 8x bb
-            ("g_lane_refclk_shift","0")
             ])
-
 
     def run_tx(self):
         if self.model=='py':
@@ -167,7 +144,7 @@ class f2_dsp(verilog,thesdk):
         elif self.model=='sv':
             for name, val in self.scan.Data.Members.items():
                 # These files are created under f2_scan_controller
-                self.iofile_bundle.Members[name]=val
+                val.adopt(parent=self)
             self.define_testbench()
             self.tb.export(force=True)
             self.write_infile()
@@ -181,7 +158,8 @@ class f2_dsp(verilog,thesdk):
             self.rx_dsp.run()
         elif self.model=='sv':
             for name, val in self.scan.Data.Members.items():
-                self.iofile_bundle.Members[name]=val
+                # These files are created under f2_scan_controller
+                val.adopt(parent=self)
             self.define_testbench()
             self.tb.export(force=True)
             self.write_infile()
@@ -288,11 +266,10 @@ end"""
         # This is a bundle of connectors connected to clockdivider ios
         # Signals/regs connected to clockdivider are automatically availabe
         # Some of them need to be renamed (mv)
+        #These are defined in scan input
         clockdivider.io_signals.mv(fro='io_Ndiv',to='lane_refclk_Ndiv')
         clockdivider.io_signals.mv(fro='io_shift',to='lane_refclk_shift')
         clockdivider.io_signals.mv(fro='io_clkpn',to='lane_refclk')
-
-        #These are defined in scan input
         clockdivider.io_signals.mv(fro='io_reset_clk',to='lane_refclk_reset')
         clockdivider.io_signals.mv(fro='reset',to='reset_clock_div')
 
@@ -314,7 +291,7 @@ end"""
                 pass
 
         # Some signals needed to control the sim
-        self.tb.connectors.new(name='reset_loop', cls='reg') #Redundant?
+        self.tb.connectors.new(name='reset_loop', cls='reg')
         self.tb.connectors.new(name='asyncResetIn_clockRef', cls='reg') #Redundant?
         self.tb.connectors.new(name='lane_clkrst_asyncResetIn', cls='reg') #Redundant?
 
@@ -368,59 +345,6 @@ end"""
         for name in oneslist:
             self.tb.connectors.Members[name].init='\'b1'
 
-        # Initialize Selected signals with parameter values
-        paramlist=[
-                ('lane_refclk_Ndiv', 'g_lane_refclk_Ndiv'),
-                ('lane_refclk_shift', 'g_lane_refclk_shift'),
-                ('io_ctrl_and_clocks_tx_Ndiv', 'tx_c_ratio'),
-                ('io_ctrl_and_clocks_tx_clkdiv_shift', 'g_tx_shift'),
-                ('io_ctrl_and_clocks_rx_Ndiv', 'rx_c_ratio'),
-                ('io_ctrl_and_clocks_rx_clkdiv_shift', 'g_rx_shift'),
-                ('io_ctrl_and_clocks_user_spread_mode', 'g_tx_user_spread_mode'),
-                ('io_ctrl_and_clocks_user_index', 'g_rx_user_index'),
-                ('io_ctrl_and_clocks_antenna_index', 'g_rx_antenna_index'),
-                ('io_ctrl_and_clocks_input_mode', 'g_rx_input_mode'),
-                ('io_ctrl_and_clocks_adc_fifo_lut_mode', 'g_rx_adc_fifo_lut_mode')
-            ]
-        for tx in range(self.Txantennas):
-            paramlist+=[
-                ('io_ctrl_and_clocks_interpolator_controls_%s_cic3derivscale' %(tx), 
-                    'g_tx_scale3'),
-                ('io_ctrl_and_clocks_interpolator_controls_%s_cic3derivshift' %(tx), 
-                    'g_tx_cic3shift'),
-                ('io_ctrl_and_clocks_interpolator_controls_%s_hb1scale' %(tx), 
-                    'g_tx_scale0'),
-                ('io_ctrl_and_clocks_interpolator_controls_%s_hb2scale' %(tx), 
-                    'g_tx_scale1'),
-                ('io_ctrl_and_clocks_interpolator_controls_%s_hb3scale' %(tx), 
-                    'g_tx_scale2'),
-                ('io_ctrl_and_clocks_interpolator_controls_%s_mode' %(tx), 
-                    'g_tx_interpolator_mode'),
-                ('io_ctrl_and_clocks_user_sum_mode_%s' %(tx), 'g_tx_user_sum_mode'),
-                ('io_ctrl_and_clocks_user_select_index_%s' %(tx), 'g_tx_user_select_index'),
-                ('io_ctrl_and_clocks_dac_data_mode_%s' %(tx), 'g_tx_dac_data_mode')
-            ]
-
-        for rx in range(self.Rxantennas):
-            paramlist+=[
-                ('io_ctrl_and_clocks_decimator_controls_%s_cic3integscale' %(rx), 
-                    'g_rx_scale0'),
-                ('io_ctrl_and_clocks_decimator_controls_%s_cic3integshift' %(rx), 
-                    'g_rx_cic3shift'),
-                ('io_ctrl_and_clocks_decimator_controls_%s_hb1scale' %(rx), 
-                    'g_rx_scale1'),
-                ('io_ctrl_and_clocks_decimator_controls_%s_hb2scale' %(rx), 
-                    'g_rx_scale2'),
-                ('io_ctrl_and_clocks_decimator_controls_%s_hb3scale' %(rx), 
-                    'g_rx_scale3'),
-                ('io_ctrl_and_clocks_decimator_controls_%s_mode' %(rx), 
-                    'g_rx_mode'),
-                ('io_ctrl_and_clocks_inv_adc_clk_pol_%s' %(rx), 
-                    'g_rx_inv_adc_clk_pol')
-            ]
-        # Loop to define the inits
-        for name in paramlist:
-            self.tb.connectors.Members[name[0]].init=name[1]
 
         # IO file connector definitions
         # Define what signals and in which order and format are read form the files
@@ -471,8 +395,8 @@ end"""
         self.tb.contents="""
 //timescale 1ps this should probably be a global model parameter
 parameter integer c_Ts=1/(g_Rs_high*1e-12);
-parameter tx_c_ratio=g_Rs_high/(8*g_Rs_low);
-parameter rx_c_ratio=g_Rs_high/(8*g_Rs_low);
+//parameter tx_c_ratio=g_Rs_high/(8*g_Rs_low);
+//parameter rx_c_ratio=g_Rs_high/(8*g_Rs_low);
 parameter RESET_TIME = 128*c_Ts; // initially 16
 """+ self.tb.connector_definitions+self.tb.assignments(
         matchlist=[r"io_ctrl_and_clocks_(dac|adc)_clocks_.?",
@@ -481,8 +405,7 @@ parameter RESET_TIME = 128*c_Ts; // initially 16
 
 
 //Helper vars for simulation control
-integer memaddrcount, initdone, rxdone, txdone;
-initial memaddrcount=0;
+integer initdone, rxdone, txdone;
 initial initdone=0;
 initial rxdone=0;
 initial txdone=0;
