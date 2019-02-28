@@ -54,5 +54,29 @@ sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path/f2_interpolator/cic3_io_clockfast \
 sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path/f2_interpolator/cic3_io_derivscale \
 sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path/f2_interpolator/cic3_io_derivshift \
 sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path/f2_interpolator/cic3_io_iptr_A_real \
-sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path/f2_interpolator/cic3_io_Z_real
+sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path/f2_interpolator/cic3_io_Z_real \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_scan_write_en \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_scan_write_mode \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_scan_write_address \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_scan_read_mode \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_scan_read_address
+dd wave -position insertpoint  \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_scan_write_mode \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_scan_write_address
+add wave -position insertpoint  \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_from_serdes_ready \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_from_serdes_valid \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_from_serdes_bits_data_0_udata_real \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_from_serdes_bits_data_0_udata_imag
+add wave -position insertpoint  \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_clock \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_reset \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_io_write_addr \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_io_read_addr \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_io_read_val_data_0_udata_real \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_io_read_val_data_0_udata_imag \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_io_write_val_data_0_udata_real \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_io_write_val_data_0_udata_imag
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock/mem_proto_data_0_udata_real \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock/mem_proto_data_0_udata_imag 
 

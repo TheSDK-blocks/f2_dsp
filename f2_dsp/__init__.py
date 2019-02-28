@@ -235,8 +235,6 @@ class f2_dsp(verilog,thesdk):
     # Define method that generates reset sewunce verilog
     def reset_sequence(self):
         reset_sequence='begin\n'+self.iofile_bundle.Members['scan_inputs'].verilog_io+"""
-    io_ctrl_and_clocks_adc_lut_reset<=0;
-    initdone<=1; //Flags that we are initiaized
 end"""
         return reset_sequence
 
@@ -320,31 +318,15 @@ end"""
         oneslist=[
             'asyncResetIn_clockRef',
             'lane_clkrst_asyncResetIn',
-            'io_ctrl_and_clocks_reset_index_count',
-            'io_ctrl_and_clocks_adc_lut_reset',
+            'io_ctrl_and_clocks_reset_index_count', #%Is this obsoleted?
             ]
+        #These are driven by serdeses, and serdes models are not there
         for serdes in range(self.nserdes):
-            oneslist+=['io_lanes_tx_%s_ready' %(serdes), 'io_lanes_rx_%s_valid' %(serdes) ]
-
-        for tx in range(self.Txantennas):
-            for user in range(self.Users):
-                oneslist+=['io_ctrl_and_clocks_tx_user_weights_%s_%s_real' %(tx,user),
-                           'io_ctrl_and_clocks_tx_user_weights_%s_%s_imag' %(tx,user)]
-        for rx in range(self.Rxantennas):
-            for user in range(self.Users):
-                oneslist+=['io_ctrl_and_clocks_rx_user_weights_%s_%s_real' %(rx,user),
-                           'io_ctrl_and_clocks_rx_user_weights_%s_%s_imag' %(rx,user)]
-        for scanind in range(self.nserdes+2):
-            oneslist+=[ 'io_ctrl_and_clocks_from_serdes_scan_%s_valid' %(scanind),
-            'io_ctrl_and_clocks_from_dsp_scan_%s_valid' %(scanind),
-            'io_ctrl_and_clocks_to_serdes_mode_%s' %(scanind)]
-
-        for scanind in range(self.nserdes+4):
-            oneslist+=[ 'io_ctrl_and_clocks_to_dsp_mode_%s' %(scanind)]
+            oneslist+=['io_lanes_tx_%s_ready' %(serdes), 
+                    'io_lanes_rx_%s_valid' %(serdes) ]
 
         for name in oneslist:
             self.tb.connectors.Members[name].init='\'b1'
-
 
         # IO file connector definitions
         # Define what signals and in which order and format are read form the files
@@ -395,9 +377,6 @@ end"""
         self.tb.contents="""
 //timescale 1ps this should probably be a global model parameter
 parameter integer c_Ts=1/(g_Rs_high*1e-12);
-//parameter tx_c_ratio=g_Rs_high/(8*g_Rs_low);
-//parameter rx_c_ratio=g_Rs_high/(8*g_Rs_low);
-parameter RESET_TIME = 128*c_Ts; // initially 16
 """+ self.tb.connector_definitions+self.tb.assignments(
         matchlist=[r"io_ctrl_and_clocks_(dac|adc)_clocks_.?",
                     r"io_ctrl_and_clocks_.*_controls_.?_reset_loop",
@@ -405,8 +384,7 @@ parameter RESET_TIME = 128*c_Ts; // initially 16
 
 
 //Helper vars for simulation control
-integer initdone, rxdone, txdone;
-initial initdone=0;
+integer rxdone, txdone;
 initial rxdone=0;
 initial txdone=0;
 
