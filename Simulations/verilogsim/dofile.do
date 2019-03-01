@@ -2,6 +2,8 @@ add wave -position insertpoint  \
 sim:/tb_f2_dsp/reset_clock_div \
 sim:/tb_f2_dsp/reset_loop \
 sim:/tb_f2_dsp/lane_refclk_reset \
+sim:/tb_f2_dsp/io_lanes_tx_enq_clock \
+sim:/tb_f2_dsp/io_lanes_rx_deq_clock \
 sim:/tb_f2_dsp/reset \
 sim:/tb_f2_dsp/io_ctrl_and_clocks_tx_reset_clkdiv \
 sim:/tb_f2_dsp/io_ctrl_and_clocks_rx_reset_clkdiv \
@@ -13,8 +15,11 @@ sim:/tb_f2_dsp/io_ctrl_and_clocks_reset_infifo \
 sim:/tb_f2_dsp/io_iptr_A_0_real \
 sim:/tb_f2_dsp/io_Z_0_real_b \
 sim:/tb_f2_dsp/io_lanes_rx_0_bits_data_0_udata_real \
+sim:/tb_f2_dsp/io_lanes_rx_0_bits_data_0_udata_imag \
 sim:/tb_f2_dsp/io_lanes_tx_0_bits_data_0_udata_real \
+sim:/tb_f2_dsp/io_lanes_tx_0_bits_data_0_udata_imag \
 sim:/tb_f2_dsp/clock \
+sim:/tb_f2_dsp/lane_refclk \
 sim:/tb_f2_dsp/io_clkp2n \
 sim:/tb_f2_dsp/io_clkp4n \
 sim:/tb_f2_dsp/io_clkp8n \
@@ -59,16 +64,13 @@ sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_scan_write_en \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_scan_write_mode \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_scan_write_address \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_scan_read_mode \
-sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_scan_read_address
-dd wave -position insertpoint  \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_scan_read_address \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_scan_write_mode \
-sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_scan_write_address
-add wave -position insertpoint  \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_scan_write_address \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_from_serdes_ready \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_from_serdes_valid \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_from_serdes_bits_data_0_udata_real \
-sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_from_serdes_bits_data_0_udata_imag
-add wave -position insertpoint  \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_from_serdes_bits_data_0_udata_imag \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_clock \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_reset \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_io_write_addr \
@@ -76,7 +78,40 @@ sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_io_read_addr \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_io_read_val_data_0_udata_real \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_io_read_val_data_0_udata_imag \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_io_write_val_data_0_udata_real \
-sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_io_write_val_data_0_udata_imag
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_io_write_val_data_0_udata_imag \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock/mem_proto_data_0_udata_real \
-sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock/mem_proto_data_0_udata_imag 
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock/mem_proto_data_0_udata_imag \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue/io_enq_clock \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue/io_enq_reset \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue/io_enq_ready \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue/io_enq_valid \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue/io_deq_clock \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue/io_deq_reset \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue/io_deq_ready \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue/io_deq_valid \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1/io_enq_clock \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1/io_enq_reset \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1/io_enq_ready \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1/io_enq_valid \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1/io_deq_clock \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1/io_deq_reset \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1/io_deq_ready \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1/io_deq_valid \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector/io_A \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector/io_rising \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_1/io_A \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_1/io_rising \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_2/io_A \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_2/io_rising \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_3/io_A \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_3/io_rising \
+sim:/tb_f2_dsp/f2_dsp/f2_lane_switch/io_to_dsp_5_ready \
+sim:/tb_f2_dsp/f2_dsp/f2_lane_switch/io_to_dsp_5_valid \
+sim:/tb_f2_dsp/f2_dsp/f2_lane_switch/io_from_serdes_0_valid \
+sim:/tb_f2_dsp/f2_dsp/f2_lane_switch/io_from_serdes_0_bits_data_0_udata_real \
+sim:/tb_f2_dsp/f2_dsp/f2_lane_switch/io_from_serdes_0_bits_data_0_udata_imag \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_from_serdes_ready \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_from_serdes_valid \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_io_deq_ready \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_io_deq_valid 
 
