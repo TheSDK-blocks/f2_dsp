@@ -13,6 +13,7 @@ sim:/tb_f2_dsp/io_ctrl_and_clocks_reset_adcfifo \
 sim:/tb_f2_dsp/io_ctrl_and_clocks_reset_outfifo \
 sim:/tb_f2_dsp/io_ctrl_and_clocks_reset_infifo \
 sim:/tb_f2_dsp/io_iptr_A_0_real \
+sim:/tb_f2_dsp/io_Z_0_real_t \
 sim:/tb_f2_dsp/io_Z_0_real_b \
 sim:/tb_f2_dsp/io_lanes_rx_0_bits_data_0_udata_real \
 sim:/tb_f2_dsp/io_lanes_rx_0_bits_data_0_udata_imag \
