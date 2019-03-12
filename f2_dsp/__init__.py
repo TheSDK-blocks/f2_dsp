@@ -232,7 +232,7 @@ class f2_dsp(verilog,thesdk):
                     self.queue.put(self._Z_imag_b[i].Data.reshape(-1,1))
 
      
-    # Define method that generates reset sewunce verilog
+    # Define method that generates reset sequence verilog
     def reset_sequence(self):
         reset_sequence='begin\n'+self.iofile_bundle.Members['scan_inputs'].verilog_io+"""
 end"""
@@ -370,7 +370,9 @@ end"""
                           'io_lanes_rx_%s_bits_data_%s_udata_imag' %(serdes,user)]
         self.iofile_bundle.Members[name].verilog_connectors=\
                 self.tb.connectors.list(names=ionames)
-
+        # Change type to signed
+        for name in ionames:
+            self.tb.connectors.Members[name].type='signed'
 
         # This should be a method too
         # Start the testbench contents
