@@ -24,6 +24,14 @@ sim:/tb_f2_dsp/lane_refclk \
 sim:/tb_f2_dsp/io_clkp2n \
 sim:/tb_f2_dsp/io_clkp4n \
 sim:/tb_f2_dsp/io_clkp8n \
+sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/io_iptr_A_0_real \
+sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/io_iptr_A_0_imag \
+sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/io_clock_outfifo_deq \
+sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/io_ofifo_valid \
+sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/io_ofifo_bits_data_0_udata_real \
+sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/io_ofifo_bits_data_0_udata_imag \
+sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/f2_rx_path_io_bypass_out_real \
+sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/f2_rx_path_io_bypass_out_imag \
 sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/io_iptr_A_bits_data_0_udata_real \
 sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path/f2_interpolator/io_iptr_A_real \
 sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path/f2_interpolator/reset \
@@ -66,8 +74,6 @@ sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path/io_dac_clock \
 sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path/io_clock_symrate \
 sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path/io_iptr_A_0_real \
 sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path/io_iptr_A_0_imag \
-sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path/daclut_real__T_2194_addr \
-sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path/daclut_imag__T_2195_addr \
 sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path/r_lutoutdata_real \
 sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path/r_lutoutdata_imag \
 sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path/r_lutreadaddress_real \
@@ -124,7 +130,6 @@ sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue/io_enq_ready \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue/io_enq_valid \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue/io_deq_clock \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue/io_deq_reset \
-sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue/io_deq_ready \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue/io_deq_valid \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1/io_enq_clock \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1/io_enq_reset \
@@ -132,7 +137,6 @@ sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1/io_enq_ready \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1/io_enq_valid \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1/io_deq_clock \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1/io_deq_reset \
-sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1/io_deq_ready \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1/io_deq_valid \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector/io_A \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector/io_rising \
@@ -149,6 +153,81 @@ sim:/tb_f2_dsp/f2_dsp/f2_lane_switch/io_from_serdes_0_bits_data_0_udata_real \
 sim:/tb_f2_dsp/f2_dsp/f2_lane_switch/io_from_serdes_0_bits_data_0_udata_imag \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_from_serdes_ready \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_from_serdes_valid \
-sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_io_deq_ready \
-sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_io_deq_valid 
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_io_deq_valid \
+sim:/tb_f2_dsp/lane_refclk \
+sim:/tb_f2_dsp/io_lanes_tx_0_bits_data_0_udata_real \
+sim:/tb_f2_dsp/io_lanes_tx_0_bits_data_0_udata_imag \
+sim:/tb_f2_dsp/lane_refclk_Ndiv \
+sim:/tb_f2_dsp/lane_refclk_shift \
+sim:/tb_f2_dsp/lane_refclk_reset \
+sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/io_rx_output_mode \
+sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/AsyncQueue_4_io_enq_clock \
+sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/AsyncQueue_4_io_enq_reset \
+sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/AsyncQueue_4_io_enq_ready \
+sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/AsyncQueue_4_io_enq_valid \
+sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/AsyncQueue_4_io_enq_bits_data_0_udata_real \
+sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/AsyncQueue_4_io_enq_bits_data_0_udata_imag \
+sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/clkmux_io_c0 \
+sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/clkmux_io_c1 \
+sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/clkmux_io_co \
+sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/clkmux_io_sel \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/w_write_mode \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/w_read_mode \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_io_enq_clock \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_io_deq_clock \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_clock \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_reset \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_io_write_addr \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_io_read_addr \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_io_read_val_data_0_udata_real \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/memblock_io_read_val_data_0_udata_imag \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_clock \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_reset \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_io_A \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_io_rising \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_1_clock \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_1_reset \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_1_io_A \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_1_io_rising \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_2_clock \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_2_reset \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_2_io_A \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_2_io_rising \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_3_clock \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_3_reset \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_3_io_A \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_3_io_rising \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/read_count \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/write_count \
+
+restart -f
+# ** Warning: (vsim-8891) All optimizations are turned off because the -novopt switch is in effect. This will cause your simulation to run very slowly. If you are using this switch to preserve visibility for Debug or PLI features please see the User's Manual section on Preserving Object Visibility with vopt.
+run -all
+# ** Note: $finish    : /tools/projects/fader2/users/mkosunen/fader2_TheSDK/Entities/f2_dsp/sv/tb_f2_dsp.sv(5496)
+#    Time: 492953125 ps  Iteration: 0  Instance: /tb_f2_dsp
+# 1
+# Break in Module tb_f2_dsp at /tools/projects/fader2/users/mkosunen/fader2_TheSDK/Entities/f2_dsp/sv/tb_f2_dsp.sv line 5496
+restasrt -f
+# invalid command name "restasrt"
+restart -f
+# ** Warning: (vsim-8891) All optimizations are turned off because the -novopt switch is in effect. This will cause your simulation to run very slowly. If you are using this switch to preserve visibility for Debug or PLI features please see the User's Manual section on Preserving Object Visibility with vopt.
+add wave -position insertpoint  \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/clock
+add wave -position insertpoint  \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/reset
+run -all
+# ** Note: $finish    : /tools/projects/fader2/users/mkosunen/fader2_TheSDK/Entities/f2_dsp/sv/tb_f2_dsp.sv(5496)
+#    Time: 492953125 ps  Iteration: 0  Instance: /tb_f2_dsp
+# Break in Module tb_f2_dsp at /tools/projects/fader2/users/mkosunen/fader2_TheSDK/Entities/f2_dsp/sv/tb_f2_dsp.sv line 5496
+add wave -position insertpoint  \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_io_enq_valid
+add wave -position insertpoint  \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1_io_deq_valid
+add wave -position insertpoint  \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1_io_enq_valid
+add wave -position insertpoint  \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1_io_deq_valid
+add wave -position insertpoint  \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_from_serdes_valid
+run -all
 

@@ -311,7 +311,9 @@ end"""
         self.tb.connectors.connect(match=r"io_ctrl_and_clocks_(dac|adc)_clocks_.?",connect='clock')
         self.tb.connectors.init(match=r"io_ctrl_and_clocks_(dac|adc)_clocks_.?",init='')
         self.tb.connectors.connect(match=r"io_lanes_tx_enq_clock",connect='lane_refclk')
+        self.tb.connectors.connect(match=r"io_lanes_rx_deq_clock",connect='lane_refclk')
         self.tb.connectors.init(match=r"io_lanes_tx_enq_clock",init='')
+        self.tb.connectors.init(match=r"io_lanes_rx_deq_clock",init='')
 
         # Init a selected set signals to chosen values
         # Some to ones
@@ -382,7 +384,7 @@ parameter integer c_Ts=1/(g_Rs_high*1e-12);
 """+ self.tb.connector_definitions+self.tb.assignments(
         matchlist=[r"io_ctrl_and_clocks_(dac|adc)_clocks_.?",
                     r"io_ctrl_and_clocks_.*_controls_.?_reset_loop",
-                    r"io_lanes_tx_enq_clock"])+self.tb.iofile_definitions+"""
+                    r"io_lanes_tx_enq_clock",r"io_lanes_rx_deq_clock"])+self.tb.iofile_definitions+"""
 
 
 //Helper vars for simulation control
