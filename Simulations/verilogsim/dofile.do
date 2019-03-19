@@ -199,35 +199,30 @@ sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_3_io_A \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/edge_detector_3_io_rising \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/read_count \
 sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/write_count \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_io_enq_valid  \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1_io_deq_valid \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1_io_enq_valid \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1_io_deq_valid \
+sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_from_serdes_valid \
+sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path_io_bypass_input_real \
+sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path_io_bypass_input_imag \
+sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path_1_io_bypass_input_real \
+sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path_1_io_bypass_input_imag \
+sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path_2_io_bypass_input_real \
+sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path_2_io_bypass_input_imag \
+sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path_3_io_bypass_input_real \
+sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path_3_io_bypass_input_imag \
+sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/tx_path_3_bypass_input_real \
+sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/tx_path_3_bypass_input_imag \
+sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/bypass_indicator_0 \
+sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/bypass_indicator_1 \
+sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/bypass_indicator_2 \
+sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/bypass_indicator_3 \
+sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/select_bypassclock \
+sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path_3/io_Z_real_b \
+sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path_3/io_Z_real_t \
+sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path_3/io_Z_imag_b \
+sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path_3/io_Z_imag_t \
 
-restart -f
-# ** Warning: (vsim-8891) All optimizations are turned off because the -novopt switch is in effect. This will cause your simulation to run very slowly. If you are using this switch to preserve visibility for Debug or PLI features please see the User's Manual section on Preserving Object Visibility with vopt.
-run -all
-# ** Note: $finish    : /tools/projects/fader2/users/mkosunen/fader2_TheSDK/Entities/f2_dsp/sv/tb_f2_dsp.sv(5496)
-#    Time: 492953125 ps  Iteration: 0  Instance: /tb_f2_dsp
-# 1
-# Break in Module tb_f2_dsp at /tools/projects/fader2/users/mkosunen/fader2_TheSDK/Entities/f2_dsp/sv/tb_f2_dsp.sv line 5496
-restasrt -f
-# invalid command name "restasrt"
-restart -f
-# ** Warning: (vsim-8891) All optimizations are turned off because the -novopt switch is in effect. This will cause your simulation to run very slowly. If you are using this switch to preserve visibility for Debug or PLI features please see the User's Manual section on Preserving Object Visibility with vopt.
-add wave -position insertpoint  \
-sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/clock
-add wave -position insertpoint  \
-sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/reset
-run -all
-# ** Note: $finish    : /tools/projects/fader2/users/mkosunen/fader2_TheSDK/Entities/f2_dsp/sv/tb_f2_dsp.sv(5496)
-#    Time: 492953125 ps  Iteration: 0  Instance: /tb_f2_dsp
-# Break in Module tb_f2_dsp at /tools/projects/fader2/users/mkosunen/fader2_TheSDK/Entities/f2_dsp/sv/tb_f2_dsp.sv line 5496
-add wave -position insertpoint  \
-sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_io_enq_valid
-add wave -position insertpoint  \
-sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1_io_deq_valid
-add wave -position insertpoint  \
-sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1_io_enq_valid
-add wave -position insertpoint  \
-sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/AsyncQueue_1_io_deq_valid
-add wave -position insertpoint  \
-sim:/tb_f2_dsp/f2_dsp/f2_serdes_test/io_from_serdes_valid
 run -all
 
