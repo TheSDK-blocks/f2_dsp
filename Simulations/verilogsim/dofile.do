@@ -223,6 +223,12 @@ sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path_3/io_Z_real_b \
 sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path_3/io_Z_real_t \
 sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path_3/io_Z_imag_b \
 sim:/tb_f2_dsp/f2_dsp/f2_tx_dsp/f2_tx_path_3/io_Z_imag_t \
+sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/f2_rx_path/weighted_users_0_real \
+sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/f2_rx_path/weighted_users_0_imag \
 
 run -all
+//sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/f2_rx_path/w_weighted_users_0_real \
+//sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/f2_rx_path/w_weighted_users_0_imag \
+//sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/f2_rx_path/io_adc_ioctrl_user_weights_0_real \
+//sim:/tb_f2_dsp/f2_dsp/f2_rx_dsp/f2_rx_path/io_adc_ioctrl_user_weights_0_imag \
 
