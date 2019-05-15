@@ -245,6 +245,7 @@ end"""
 
         #Assign verilog simulation parameters to testbench
         self.tb.parameters=self.vlogparameters
+        self.tb.content_parameters={'c_Ts': ('integer','1/(g_Rs_high*1e-12)')}
 
         # Copy iofile simulation parametrs to testbench
         for name, val in self.iofile_bundle.Members.items():
@@ -258,8 +259,8 @@ end"""
         self.tb.file=self.vlogtbsrc
 
         # Create clockdivider instance
-        clockdivider=verilog_module(file=self.vlogsrcpath+'/clkdiv_n_2_4_8.v',
-                instname='clockdivider')
+        self.tb.verilog_instance_add(file=self.vlogsrcpath+'/clkdiv_n_2_4_8.v', name='clockdivider')
+        clockdivider=self.tb.verilog_instances.Members['clockdivider']
 
         # This is a bundle of connectors connected to clockdivider ios
         # Signals/regs connected to clockdivider are automatically availabe
@@ -344,6 +345,7 @@ end"""
         for val in self.iofile_bundle.Members[name].verilog_connectors:
             if re.match(r".*(real|imag)_t",val.name):
                 val.ioformat="%b"
+        self.iofile_bundle.Members[name].verilog_io_condition_append(cond='&& initdone')
 
         name='io_lanes_tx'
         ionames=[]
@@ -353,8 +355,9 @@ end"""
         self.iofile_bundle.Members[name].verilog_connectors=\
                 self.tb.connectors.list(names=ionames)
         # Change type to signed
-        for name in ionames:
-            self.tb.connectors.Members[name].type='signed'
+        for ioname in ionames:
+            self.tb.connectors.Members[ioname].type='signed'
+        self.iofile_bundle.Members[name].verilog_io_condition_append(cond='&& initdone')
 
         name='A'
         ionames=[]
@@ -363,6 +366,7 @@ end"""
                      'io_iptr_A_%s_imag' %(count)]
         self.iofile_bundle.Members[name].verilog_connectors=\
                 self.tb.connectors.list(names=ionames)
+        self.iofile_bundle.Members[name].verilog_io_condition='initdone'
         
         name='io_lanes_rx'
         ionames=[]
@@ -373,85 +377,94 @@ end"""
         self.iofile_bundle.Members[name].verilog_connectors=\
                 self.tb.connectors.list(names=ionames)
         # Change type to signed
-        for name in ionames:
-            self.tb.connectors.Members[name].type='signed'
+        for ioname in ionames:
+            self.tb.connectors.Members[ioname].type='signed'
+        self.iofile_bundle.Members[name].verilog_io_condition='initdone'
+
+        self.tb.assignment_matchlist=[r"io_ctrl_and_clocks_(dac|adc)_clocks_.?",
+                    r"io_ctrl_and_clocks_.*_controls_.?_reset_loop",
+                    r"io_lanes_tx_enq_clock",r"io_lanes_rx_deq_clock"]
+
+        ## This method is in verilog_testbench class
+        self.tb.generate_contents()
 
         # This should be a method too
         # Start the testbench contents
-        self.tb.contents="""
-//timescale 1ps this should probably be a global model parameter
-parameter integer c_Ts=1/(g_Rs_high*1e-12);
-"""+ self.tb.connector_definitions+self.tb.assignments(
-        matchlist=[r"io_ctrl_and_clocks_(dac|adc)_clocks_.?",
-                    r"io_ctrl_and_clocks_.*_controls_.?_reset_loop",
-                    r"io_lanes_tx_enq_clock",r"io_lanes_rx_deq_clock"])+self.tb.iofile_definitions+"""
 
-
-//Helper vars for simulation control
-integer rxdone, txdone;
-initial rxdone=0;
-initial txdone=0;
-
-
-//Clock divider model\n""" + clockdivider.instance + """//DUT definition
-"""+self.tb.dut_instance.instance+"""
-
-//Master clock is omnipresent
-always #(c_Ts/2.0) clock = !clock;
-
-//Execution with parallel fork-join and sequential begin-end sections
-initial #0 begin
-fork
-""" + self.tb.connectors.verilog_inits(level=1)+""" 
-//Tx_io
-@(posedge initdone) begin
-while (!txdone) begin
-@(posedge io_ctrl_and_clocks_dac_clocks_0 ) begin
-    //Print only valid values
-    if ("""+self.iofile_bundle.Members['Z'].verilog_io_condition + """
-    ) begin \n"""+ self.iofile_bundle.Members['Z'].verilog_io+"""
-     end
-end
-end
-end
-
-//Rx_io
-@(posedge initdone) begin
-while (!rxdone) begin
-@(posedge lane_refclk ) begin
-//Mimic the reading to lanes
-    //Print only valid values
-    if ((io_lanes_tx_0_valid==1)  &&
-    """+self.iofile_bundle.Members['io_lanes_tx'].verilog_io_condition + """
-) begin
-"""+self.iofile_bundle.Members['io_lanes_tx'].verilog_io + """
-    end
-end
-end
-end
-
-"""+ self.reset_sequence()+"""
-        // Sequence triggered by initdone
-        @(posedge initdone) begin
-            while (!$feof(f_io_lanes_rx)) begin
-                 //Lane output fifo is read by the symrate clock
-                 @(posedge io_lanes_rx_deq_clock )
-                 """+ self.iofile_bundle.Members['io_lanes_rx'].verilog_io+"""
-            end
-            txdone<=1;
-        end
-        // Sequence triggered by initdone
-        @(posedge initdone) begin
-            while (!$feof(f_A)) begin
-                @(posedge io_ctrl_and_clocks_adc_clocks_0 )
-                """+self.iofile_bundle.Members['A'].verilog_io+"""
-            end
-            rxdone<=1;
-        end
-    join
-    """+self.tb.iofile_close+"""
-    $finish;
-end"""
+#        self.tb.contents="""
+#//timescale 1ps this should probably be a global model parameter
+#parameter integer c_Ts=1/(g_Rs_high*1e-12);
+#"""+ self.tb.connector_definitions+self.tb.assignments(
+#        matchlist=[r"io_ctrl_and_clocks_(dac|adc)_clocks_.?",
+#                    r"io_ctrl_and_clocks_.*_controls_.?_reset_loop",
+#                    r"io_lanes_tx_enq_clock",r"io_lanes_rx_deq_clock"])+self.tb.iofile_definitions+"""
+#
+#
+#//Helper vars for simulation control
+#integer rxdone, txdone;
+#initial rxdone=0;
+#initial txdone=0;
+#
+#
+#//Clock divider model\n""" + clockdivider.instance + """//DUT definition
+#"""+self.tb.dut_instance.instance+"""
+#
+#//Master clock is omnipresent
+#always #(c_Ts/2.0) clock = !clock;
+#
+#//Execution with parallel fork-join and sequential begin-end sections
+#initial #0 begin
+#fork
+#""" + self.tb.connectors.verilog_inits(level=1)+""" 
+#//Tx_io
+#@(posedge initdone) begin
+#while (!txdone) begin
+#@(posedge io_ctrl_and_clocks_dac_clocks_0 ) begin
+#    //Print only valid values
+#    if ("""+self.iofile_bundle.Members['Z'].verilog_io_condition + """
+#    ) begin \n"""+ self.iofile_bundle.Members['Z'].verilog_io+"""
+#     end
+#end
+#end
+#end
+#
+#//Rx_io
+#@(posedge initdone) begin
+#while (!rxdone) begin
+#@(posedge lane_refclk ) begin
+#//Mimic the reading to lanes
+#    //Print only valid values
+#    if ((io_lanes_tx_0_valid==1)  &&
+#    """+self.iofile_bundle.Members['io_lanes_tx'].verilog_io_condition + """
+#) begin
+#"""+self.iofile_bundle.Members['io_lanes_tx'].verilog_io + """
+#    end
+#end
+#end
+#end
+#
+#"""+ self.reset_sequence()+"""
+#        // Sequence triggered by initdone
+#        @(posedge initdone) begin
+#            while (!$feof(f_io_lanes_rx)) begin
+#                 //Lane output fifo is read by the symrate clock
+#                 @(posedge io_lanes_rx_deq_clock )
+#                 """+ self.iofile_bundle.Members['io_lanes_rx'].verilog_io+"""
+#            end
+#            txdone<=1;
+#        end
+#        // Sequence triggered by initdone
+#        @(posedge initdone) begin
+#            while (!$feof(f_A)) begin
+#                @(posedge io_ctrl_and_clocks_adc_clocks_0 )
+#                """+self.iofile_bundle.Members['A'].verilog_io+"""
+#            end
+#            rxdone<=1;
+#        end
+#    join
+#    """+self.tb.iofile_close+"""
+#    $finish;
+#end"""
 
 if __name__=="__main__":
     import textwrap
