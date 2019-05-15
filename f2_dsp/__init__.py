@@ -346,6 +346,7 @@ end"""
             if re.match(r".*(real|imag)_t",val.name):
                 val.ioformat="%b"
         self.iofile_bundle.Members[name].verilog_io_condition_append(cond='&& initdone')
+        self.iofile_bundle.Members[name].verilog_io_sync='@(posedge io_ctrl_and_clocks_dac_clocks_0 )\n'
 
         name='io_lanes_tx'
         ionames=[]
@@ -357,7 +358,8 @@ end"""
         # Change type to signed
         for ioname in ionames:
             self.tb.connectors.Members[ioname].type='signed'
-        self.iofile_bundle.Members[name].verilog_io_condition_append(cond='&& initdone')
+        self.iofile_bundle.Members[name].verilog_io_condition_append(cond='&& initdone && io_lanes_tx_0_valid')
+        self.iofile_bundle.Members[name].verilog_io_sync='@(posedge lane_refclk )\n'
 
         name='A'
         ionames=[]
@@ -380,6 +382,7 @@ end"""
         for ioname in ionames:
             self.tb.connectors.Members[ioname].type='signed'
         self.iofile_bundle.Members[name].verilog_io_condition='initdone'
+
 
         self.tb.assignment_matchlist=[r"io_ctrl_and_clocks_(dac|adc)_clocks_.?",
                     r"io_ctrl_and_clocks_.*_controls_.?_reset_loop",
